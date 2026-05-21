@@ -1,7 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, router } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useCallback, useEffect, useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,6 +17,7 @@ import {
 const TEMP_USER = 'inspector';
 const TEMP_PASSWORD = '123456';
 const STORAGE_KEY = 'inspections';
+const SESSION_KEY = 'temp_session';
 
 interface InspectionItem {
   id: string;
@@ -48,6 +51,18 @@ export default function LoginScreen() {
     setTodayInspections(all.filter((item) => isToday(item.createdAt)));
   }, []);
 
+  useEffect(() => {
+    const loadSession = async () => {
+      const session = await AsyncStorage.getItem(SESSION_KEY);
+      if (session === 'active') {
+        setIsLoggedIn(true);
+        await loadTodayInspections();
+      }
+    };
+
+    void loadSession();
+  }, [loadTodayInspections]);
+
   useFocusEffect(
     useCallback(() => {
       if (isLoggedIn) {
@@ -73,10 +88,18 @@ export default function LoginScreen() {
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.card}>
-          <View style={styles.logoMark}>
-            <Text style={styles.logoLetters}>VA</Text>
+        {isLoggedIn ? (
+          <View style={styles.topBar}>
+            <Text style={styles.topBarTitle}>inspeccor</Text>
+            <Pressable style={styles.logoutButton} onPress={async () => { await AsyncStorage.removeItem(SESSION_KEY); setIsLoggedIn(false); }}>
+              <Ionicons name="log-out-outline" size={22} color="#FFF" />
+              <Text style={styles.logoutText}>Cerrar sesión</Text>
+            </Pressable>
           </View>
+        ) : null}
+        <View style={styles.content}>
+          <View style={styles.card}>
+          <Image source={require('@/assets/images/logo.png')} style={styles.logoImage} resizeMode="contain" />
           <Text style={styles.brandText}>EL EVALUADOR</Text>
           <Text style={styles.title}>Inspección Vehicular</Text>
 
@@ -122,6 +145,7 @@ export default function LoginScreen() {
               )}
             </>
           )}
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -130,7 +154,21 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F5F5F5' },
-  container: { flex: 1, justifyContent: 'center', padding: 24 },
+  container: { flex: 1 },
+  topBar: {
+    width: '100%',
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  topBarTitle: { color: '#FFF', fontSize: 20, fontWeight: '700' },
+  logoutButton: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  logoutText: { color: '#FFF', fontWeight: '600' },
+  content: { flex: 1, justifyContent: 'center', padding: 24 },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
@@ -142,15 +180,8 @@ const styles = StyleSheet.create({
   },
   logoMark: {
     alignSelf: 'center',
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: '#D80D18',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
   },
-  logoLetters: { color: '#FFF', fontWeight: '800', fontSize: 34 },
+  logoImage: { alignSelf: 'center', width: 200, height: 80, marginBottom: 12 },
   brandText: {
     alignSelf: 'center',
     letterSpacing: 3,
