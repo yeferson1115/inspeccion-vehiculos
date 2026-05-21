@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, router } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,6 +16,7 @@ import {
 const TEMP_USER = 'inspector';
 const TEMP_PASSWORD = '123456';
 const STORAGE_KEY = 'inspections';
+const SESSION_KEY = 'temp_session';
 
 interface InspectionItem {
   id: string;
@@ -48,6 +50,18 @@ export default function LoginScreen() {
     setTodayInspections(all.filter((item) => isToday(item.createdAt)));
   }, []);
 
+  useEffect(() => {
+    const loadSession = async () => {
+      const session = await AsyncStorage.getItem(SESSION_KEY);
+      if (session === 'active') {
+        setIsLoggedIn(true);
+        await loadTodayInspections();
+      }
+    };
+
+    void loadSession();
+  }, [loadTodayInspections]);
+
   useFocusEffect(
     useCallback(() => {
       if (isLoggedIn) {
@@ -74,9 +88,7 @@ export default function LoginScreen() {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.card}>
-          <View style={styles.logoMark}>
-            <Text style={styles.logoLetters}>VA</Text>
-          </View>
+          <Image source={require('@/assets/images/logo.png')} style={styles.logoImage} resizeMode="contain" />
           <Text style={styles.brandText}>EL EVALUADOR</Text>
           <Text style={styles.title}>Inspección Vehicular</Text>
 
@@ -142,15 +154,8 @@ const styles = StyleSheet.create({
   },
   logoMark: {
     alignSelf: 'center',
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: '#D80D18',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
   },
-  logoLetters: { color: '#FFF', fontWeight: '800', fontSize: 34 },
+  logoImage: { alignSelf: 'center', width: 200, height: 80, marginBottom: 12 },
   brandText: {
     alignSelf: 'center',
     letterSpacing: 3,
