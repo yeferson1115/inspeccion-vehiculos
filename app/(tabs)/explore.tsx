@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
@@ -13,11 +14,53 @@ import {
   View,
 } from 'react-native';
 
+interface InspectionItem {
+  id: string;
+  placa: string;
+  kilometraje: string;
+  observaciones: string;
+  imagenes: string[];
+  createdAt: string;
+}
+
+const STORAGE_KEY = 'inspections';
+
+const normalizePlate = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+
+const extractPlateFromUri = (uri: string) => {
+  const match = uri.toUpperCase().match(/[A-Z]{3}[0-9]{3}|[A-Z]{3}[0-9]{2}[A-Z]/);
+  return match?.[0] ?? '';
+};
+
 export default function NewInspectionScreen() {
   const [placa, setPlaca] = useState('');
   const [kilometraje, setKilometraje] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [imagenes, setImagenes] = useState<string[]>([]);
+
+  const capturarPlaca = async () => {
+    const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!cameraPermission.granted) {
+      Alert.alert('Permiso requerido', 'Debes permitir acceso a la cámara.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      allowsEditing: false,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      const detectedPlate = extractPlateFromUri(result.assets[0].uri);
+      if (detectedPlate) {
+        setPlaca(detectedPlate);
+        Alert.alert('Placa detectada', `Se reconoció: ${detectedPlate}`);
+      } else {
+        Alert.alert('Sin reconocimiento automático', 'No se pudo reconocer la placa automáticamente. Puedes escribirla manualmente.');
+      }
+    }
+  };
 
   const agregarImagen = async () => {
     if (imagenes.length >= 10) {
@@ -25,13 +68,13 @@ export default function NewInspectionScreen() {
       return;
     }
 
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Permiso requerido', 'Debes permitir acceso a tus fotos.');
+    const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!cameraPermission.granted) {
+      Alert.alert('Permiso requerido', 'Debes permitir acceso a la cámara.');
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['images'],
       allowsEditing: false,
       quality: 0.7,
@@ -42,7 +85,25 @@ export default function NewInspectionScreen() {
     }
   };
 
-  const guardar = () => {
+  const guardar = async () => {
+    if (!placa.trim()) {
+      Alert.alert('Campo requerido', 'Debes ingresar o capturar una placa.');
+      return;
+    }
+
+    const newItem: InspectionItem = {
+      id: Date.now().toString(),
+      placa: normalizePlate(placa),
+      kilometraje,
+      observaciones,
+      imagenes,
+      createdAt: new Date().toISOString(),
+    };
+
+    const current = await AsyncStorage.getItem(STORAGE_KEY);
+    const parsed: InspectionItem[] = current ? JSON.parse(current) : [];
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([newItem, ...parsed]));
+
     Alert.alert('Inspección', 'Se guardó correctamente.');
     setPlaca('');
     setKilometraje('');
@@ -55,7 +116,20 @@ export default function NewInspectionScreen() {
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.title}>Nueva inspección</Text>
 
-        <TextInput style={styles.input} value={placa} onChangeText={setPlaca} placeholder="Número de placa" />
+        <Text style={styles.label}>Placa</Text>
+        <TextInput
+          style={styles.input}
+          value={placa}
+          onChangeText={(text) => setPlaca(normalizePlate(text))}
+          placeholder="Número de placa"
+          autoCapitalize="characters"
+        />
+
+        <Pressable style={styles.secondaryButton} onPress={capturarPlaca}>
+          <Ionicons name="camera-outline" size={20} color="#B91C1C" />
+          <Text style={styles.secondaryButtonText}>Tomar foto para reconocer placa</Text>
+        </Pressable>
+
         <TextInput
           style={styles.input}
           value={kilometraje}
@@ -72,8 +146,8 @@ export default function NewInspectionScreen() {
         />
 
         <Pressable style={styles.secondaryButton} onPress={agregarImagen}>
-          <Ionicons name="images-outline" size={20} color="#B91C1C" />
-          <Text style={styles.secondaryButtonText}>Cargar imagen ({imagenes.length}/10)</Text>
+          <Ionicons name="camera-reverse-outline" size={20} color="#B91C1C" />
+          <Text style={styles.secondaryButtonText}>Cargar imagen con cámara ({imagenes.length}/10)</Text>
         </Pressable>
 
         <View style={styles.grid}>
@@ -94,6 +168,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F5F5F5' },
   container: { padding: 20, paddingBottom: 32 },
   title: { fontSize: 26, fontWeight: '700', color: '#B91C1C', marginBottom: 16 },
+  label: { fontWeight: '600', color: '#3F3F46', marginBottom: 8 },
   input: {
     backgroundColor: '#FFF',
     borderRadius: 12,

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { useFocusEffect, router } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -14,18 +14,54 @@ import {
 
 const TEMP_USER = 'inspector';
 const TEMP_PASSWORD = '123456';
+const STORAGE_KEY = 'inspections';
+
+interface InspectionItem {
+  id: string;
+  placa: string;
+  kilometraje: string;
+  observaciones: string;
+  imagenes: string[];
+  createdAt: string;
+}
+
+const isToday = (isoDate: string) => {
+  const today = new Date();
+  const date = new Date(isoDate);
+  return (
+    today.getFullYear() === date.getFullYear() &&
+    today.getMonth() === date.getMonth() &&
+    today.getDate() === date.getDate()
+  );
+};
 
 export default function LoginScreen() {
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [todayInspections, setTodayInspections] = useState<InspectionItem[]>([]);
+
+  const loadTodayInspections = useCallback(async () => {
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    const all: InspectionItem[] = raw ? JSON.parse(raw) : [];
+    setTodayInspections(all.filter((item) => isToday(item.createdAt)));
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isLoggedIn) {
+        void loadTodayInspections();
+      }
+    }, [isLoggedIn, loadTodayInspections]),
+  );
 
   const handleLogin = async () => {
     if (user.trim() === TEMP_USER && password === TEMP_PASSWORD) {
       await AsyncStorage.setItem('temp_session', 'active');
       setError('');
       setIsLoggedIn(true);
+      await loadTodayInspections();
       return;
     }
 
@@ -69,9 +105,22 @@ export default function LoginScreen() {
               </Pressable>
             </>
           ) : (
-            <Pressable style={styles.primaryButton} onPress={() => router.push('/explore')}>
-              <Text style={styles.primaryButtonText}>Inspeccionar</Text>
-            </Pressable>
+            <>
+              <Pressable style={styles.primaryButton} onPress={() => router.push('/explore')}>
+                <Text style={styles.primaryButtonText}>Inspeccionar</Text>
+              </Pressable>
+              <Text style={styles.listTitle}>Inspecciones de hoy ({todayInspections.length})</Text>
+              {todayInspections.length === 0 ? (
+                <Text style={styles.emptyText}>No hay inspecciones registradas hoy.</Text>
+              ) : (
+                todayInspections.map((item) => (
+                  <View key={item.id} style={styles.listItem}>
+                    <Text style={styles.listPlate}>{item.placa}</Text>
+                    <Text style={styles.listMeta}>Km: {item.kilometraje || 'N/A'} · Fotos: {item.imagenes.length}</Text>
+                  </View>
+                ))
+              )}
+            </>
           )}
         </View>
       </KeyboardAvoidingView>
@@ -136,4 +185,16 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   primaryButtonText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
+  listTitle: { marginTop: 16, fontWeight: '700', color: '#3F3F46', marginBottom: 8 },
+  emptyText: { color: '#71717A' },
+  listItem: {
+    backgroundColor: '#FFF1F2',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  listPlate: { fontWeight: '700', color: '#B91C1C' },
+  listMeta: { color: '#52525B', marginTop: 2 },
 });
