@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
 import {
@@ -24,6 +25,7 @@ interface InspectionItem {
 }
 
 const STORAGE_KEY = 'inspections';
+const SESSION_KEY = 'temp_session';
 
 const normalizePlate = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
 
@@ -105,15 +107,29 @@ export default function NewInspectionScreen() {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([newItem, ...parsed]));
 
     Alert.alert('Inspección', 'Se guardó correctamente.');
-    setPlaca('');
-    setKilometraje('');
-    setObservaciones('');
-    setImagenes([]);
+    router.replace('/');
+  };
+
+  const cancelar = () => {
+    router.replace('/');
+  };
+
+  const cerrarSesion = async () => {
+    await AsyncStorage.removeItem(SESSION_KEY);
+    router.replace('/');
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
+        <View style={styles.topBar}>
+          <Text style={styles.topBarTitle}>inspeccor</Text>
+          <Pressable style={styles.logoutButton} onPress={cerrarSesion}>
+            <Ionicons name="log-out-outline" size={22} color="#FFF" />
+            <Text style={styles.logoutText}>Cerrar sesión</Text>
+          </Pressable>
+        </View>
+
         <Text style={styles.title}>Nueva inspección</Text>
 
         <Text style={styles.label}>Placa</Text>
@@ -159,6 +175,10 @@ export default function NewInspectionScreen() {
         <Pressable style={styles.primaryButton} onPress={guardar}>
           <Text style={styles.primaryButtonText}>Guardar</Text>
         </Pressable>
+
+        <Pressable style={styles.cancelButton} onPress={cancelar}>
+          <Text style={styles.cancelButtonText}>Cancelar</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -167,6 +187,19 @@ export default function NewInspectionScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F5F5F5' },
   container: { padding: 20, paddingBottom: 32 },
+  topBar: {
+    backgroundColor: '#DC2626',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  topBarTitle: { color: '#FFF', fontSize: 20, fontWeight: '700' },
+  logoutButton: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  logoutText: { color: '#FFF', fontWeight: '600' },
   title: { fontSize: 26, fontWeight: '700', color: '#B91C1C', marginBottom: 16 },
   label: { fontWeight: '600', color: '#3F3F46', marginBottom: 8 },
   input: {
@@ -201,4 +234,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  cancelButton: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 12,
+    height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF',
+  },
+  cancelButtonText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
 });
