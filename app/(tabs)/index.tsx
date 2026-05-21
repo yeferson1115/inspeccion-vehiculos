@@ -97,7 +97,8 @@ export default function LoginScreen() {
             </Pressable>
           </View>
         ) : null}
-        <View style={styles.card}>
+        <View style={styles.content}>
+          <View style={styles.card}>
           <Image source={require('@/assets/images/logo.png')} style={styles.logoImage} resizeMode="contain" />
           <Text style={styles.brandText}>EL EVALUADOR</Text>
           <Text style={styles.title}>Inspección Vehicular</Text>
@@ -144,6 +145,7 @@ export default function LoginScreen() {
               )}
             </>
           )}
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -152,7 +154,7 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F5F5F5' },
-  container: { flex: 1, justifyContent: 'center', padding: 24 },
+  container: { flex: 1 },
   topBar: {
     width: '100%',
     backgroundColor: '#DC2626',
@@ -166,6 +168,7 @@ const styles = StyleSheet.create({
   topBarTitle: { color: '#FFF', fontSize: 20, fontWeight: '700' },
   logoutButton: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   logoutText: { color: '#FFF', fontWeight: '600' },
+  content: { flex: 1, justifyContent: 'center', padding: 24 },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 24,

@@ -130,7 +130,8 @@ export default function NewInspectionScreen() {
           </Pressable>
         </View>
 
-        <Text style={styles.title}>Nueva inspección</Text>
+        <View style={styles.formContent}>
+          <Text style={styles.title}>Nueva inspección</Text>
 
         <Text style={styles.label}>Placa</Text>
         <TextInput
@@ -176,9 +177,10 @@ export default function NewInspectionScreen() {
           <Text style={styles.primaryButtonText}>Guardar</Text>
         </Pressable>
 
-        <Pressable style={styles.cancelButton} onPress={cancelar}>
-          <Text style={styles.cancelButtonText}>Cancelar</Text>
-        </Pressable>
+          <Pressable style={styles.cancelButton} onPress={cancelar}>
+            <Text style={styles.cancelButtonText}>Cancelar</Text>
+          </Pressable>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -186,7 +188,7 @@ export default function NewInspectionScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F5F5F5' },
-  container: { paddingHorizontal: 20, paddingBottom: 32 },
+  container: { paddingBottom: 32 },
   topBar: {
     backgroundColor: '#DC2626',
     paddingHorizontal: 14,
@@ -200,6 +202,7 @@ const styles = StyleSheet.create({
   topBarTitle: { color: '#FFF', fontSize: 20, fontWeight: '700' },
   logoutButton: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   logoutText: { color: '#FFF', fontWeight: '600' },
+  formContent: { paddingHorizontal: 20 },
   title: { fontSize: 26, fontWeight: '700', color: '#B91C1C', marginBottom: 16 },
   label: { fontWeight: '600', color: '#3F3F46', marginBottom: 8 },
   input: {
