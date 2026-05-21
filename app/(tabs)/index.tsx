@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Image,
@@ -87,6 +88,15 @@ export default function LoginScreen() {
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {isLoggedIn ? (
+          <View style={styles.topBar}>
+            <Text style={styles.topBarTitle}>inspeccor</Text>
+            <Pressable style={styles.logoutButton} onPress={async () => { await AsyncStorage.removeItem(SESSION_KEY); setIsLoggedIn(false); }}>
+              <Ionicons name="log-out-outline" size={22} color="#FFF" />
+              <Text style={styles.logoutText}>Cerrar sesión</Text>
+            </Pressable>
+          </View>
+        ) : null}
         <View style={styles.card}>
           <Image source={require('@/assets/images/logo.png')} style={styles.logoImage} resizeMode="contain" />
           <Text style={styles.brandText}>EL EVALUADOR</Text>
@@ -143,6 +153,19 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F5F5F5' },
   container: { flex: 1, justifyContent: 'center', padding: 24 },
+  topBar: {
+    width: '100%',
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  topBarTitle: { color: '#FFF', fontSize: 20, fontWeight: '700' },
+  logoutButton: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  logoutText: { color: '#FFF', fontWeight: '600' },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 24,

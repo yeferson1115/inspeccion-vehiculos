@@ -186,16 +186,16 @@ export default function NewInspectionScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F5F5F5' },
-  container: { padding: 20, paddingBottom: 32 },
+  container: { paddingHorizontal: 20, paddingBottom: 32 },
   topBar: {
     backgroundColor: '#DC2626',
-    borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 16,
+    width: '100%',
   },
   topBarTitle: { color: '#FFF', fontSize: 20, fontWeight: '700' },
   logoutButton: { flexDirection: 'row', alignItems: 'center', gap: 6 },
