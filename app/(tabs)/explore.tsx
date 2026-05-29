@@ -112,7 +112,7 @@ export default function NewInspectionScreen() {
   const [isServiceSelectOpen, setIsServiceSelectOpen] = useState(false);
   const [observaciones, setObservaciones] = useState('');
   const [imagenes, setImagenes] = useState<InspectionImage[]>([]);
-  const [showSavedPrompt, setShowSavedPrompt] = useState(false);
+  const [savedPromptVisible, setSavedPromptVisible] = useState(false);
 
   useEffect(() => {
     const loadInspection = async () => {
@@ -200,16 +200,16 @@ export default function NewInspectionScreen() {
   );
 
   const showCreateAnotherPrompt = () => {
-    setShowSavedPrompt(true);
+    setSavedPromptVisible(true);
   };
 
   const handleCreateAnotherInspection = () => {
-    setShowSavedPrompt(false);
+    setSavedPromptVisible(false);
     resetForm();
   };
 
   const handleGoToInspectionList = () => {
-    setShowSavedPrompt(false);
+    setSavedPromptVisible(false);
     router.replace('/');
   };
 
@@ -391,6 +391,21 @@ export default function NewInspectionScreen() {
           <Pressable style={styles.cancelButton} onPress={cancelar}>
             <Text style={styles.cancelButtonText}>Cancelar</Text>
           </Pressable>
+
+          {savedPromptVisible ? (
+            <View style={styles.savedPrompt}>
+              <Text style={styles.savedPromptTitle}>Ingreso móvil guardado</Text>
+              <Text style={styles.savedPromptMessage}>Ingreso móvil guardado correctamente. ¿Deseas crear uno nuevo?</Text>
+              <View style={styles.savedPromptActions}>
+                <Pressable style={[styles.savedPromptButton, styles.savedPromptSecondaryButton]} onPress={handleGoToInspectionList}>
+                  <Text style={styles.savedPromptSecondaryText}>No</Text>
+                </Pressable>
+                <Pressable style={[styles.savedPromptButton, styles.savedPromptPrimaryButton]} onPress={handleCreateAnotherInspection}>
+                  <Text style={styles.savedPromptPrimaryText}>Sí</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -513,24 +528,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
   },
   cancelButtonText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
-  alertOverlay: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    padding: 24,
-  },
-  alertCard: {
-    width: '100%',
-    maxWidth: 420,
+  savedPrompt: {
+    marginTop: 16,
     backgroundColor: '#FFF',
+    borderColor: '#FCA5A5',
+    borderWidth: 1,
     borderRadius: 18,
-    padding: 22,
+    padding: 18,
   },
-  alertTitle: { color: '#B91C1C', fontSize: 22, fontWeight: '800', marginBottom: 10 },
-  alertMessage: { color: '#3F3F46', fontSize: 16, lineHeight: 22, marginBottom: 22 },
-  alertActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
-  alertButton: {
+  savedPromptTitle: { color: '#B91C1C', fontSize: 20, fontWeight: '800', marginBottom: 8 },
+  savedPromptMessage: { color: '#3F3F46', fontSize: 16, lineHeight: 22, marginBottom: 18 },
+  savedPromptActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
+  savedPromptButton: {
     minWidth: 96,
     minHeight: 44,
     borderRadius: 12,
@@ -538,8 +547,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 18,
   },
-  alertSecondaryButton: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#FCA5A5' },
-  alertPrimaryButton: { backgroundColor: '#E11D2E' },
-  alertSecondaryText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
-  alertPrimaryText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  savedPromptSecondaryButton: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#FCA5A5' },
+  savedPromptPrimaryButton: { backgroundColor: '#E11D2E' },
+  savedPromptSecondaryText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
+  savedPromptPrimaryText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 });
