@@ -199,16 +199,16 @@ export default function NewInspectionScreen() {
     `La inspección quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${inspection.lastSyncError ? ` Detalle: ${inspection.lastSyncError}` : ''} Intenta nuevamente cuando tengas internet.`
   );
 
-  const preguntarCrearOtro = () => {
+  const showCreateAnotherPrompt = () => {
     setShowSavedPrompt(true);
   };
 
-  const crearOtro = () => {
+  const handleCreateAnotherInspection = () => {
     setShowSavedPrompt(false);
     resetForm();
   };
 
-  const volverAlListado = () => {
+  const handleGoToInspectionList = () => {
     setShowSavedPrompt(false);
     router.replace('/');
   };
@@ -247,7 +247,7 @@ export default function NewInspectionScreen() {
       }
 
       if (!isEditing) {
-        preguntarCrearOtro();
+        showCreateAnotherPrompt();
         return;
       }
 
@@ -394,16 +394,16 @@ export default function NewInspectionScreen() {
         </View>
       </ScrollView>
 
-      <Modal transparent animationType="fade" visible={showSavedPrompt} onRequestClose={crearOtro}>
+      <Modal transparent animationType="fade" visible={showSavedPrompt} onRequestClose={handleCreateAnotherInspection}>
         <View style={styles.alertOverlay}>
           <View style={styles.alertCard}>
             <Text style={styles.alertTitle}>Ingreso móvil guardado</Text>
             <Text style={styles.alertMessage}>Ingreso móvil guardado correctamente. ¿Deseas crear uno nuevo?</Text>
             <View style={styles.alertActions}>
-              <Pressable style={[styles.alertButton, styles.alertSecondaryButton]} onPress={volverAlListado}>
+              <Pressable style={[styles.alertButton, styles.alertSecondaryButton]} onPress={handleGoToInspectionList}>
                 <Text style={styles.alertSecondaryText}>No</Text>
               </Pressable>
-              <Pressable style={[styles.alertButton, styles.alertPrimaryButton]} onPress={crearOtro}>
+              <Pressable style={[styles.alertButton, styles.alertPrimaryButton]} onPress={handleCreateAnotherInspection}>
                 <Text style={styles.alertPrimaryText}>Sí</Text>
               </Pressable>
             </View>
