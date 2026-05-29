@@ -18,13 +18,20 @@ export const INSPECTION_SERVICE_TYPES: InspectionServiceType[] = [
   'Sec Bogota',
 ];
 
+export interface InspectionImage {
+  uri: string;
+  name: string;
+  type: string;
+  base64?: string | null;
+}
+
 export interface InspectionItem {
   id: string;
   placa: string;
   kilometraje: string;
   tipoServicio: InspectionServiceType;
   observaciones: string;
-  imagenes: string[];
+  imagenes: InspectionImage[];
   createdAt: string;
   syncStatus: InspectionSyncStatus;
   syncAttempts: number;
@@ -42,7 +49,7 @@ export interface InspectionPayload {
   tiposervicio: InspectionServiceType;
   fecha_inspeccion: string;
   origen: 'app_movil';
-  imagenes: string[];
+  imagenes: InspectionImage[];
 }
 
 export interface SyncResult {
@@ -57,6 +64,45 @@ interface LaravelSaveResponse {
     id?: number | string;
   };
 }
+
+const getImageName = (uri: string, index: number) => {
+  const name = uri.split('/').pop()?.split('?')[0];
+  return name || `inspeccion-${index + 1}.jpg`;
+};
+
+const getImageType = (uri: string) => {
+  const extension = uri.split('.').pop()?.toLowerCase().split('?')[0];
+
+  if (extension === 'png') {
+    return 'image/png';
+  }
+
+  if (extension === 'webp') {
+    return 'image/webp';
+  }
+
+  return 'image/jpeg';
+};
+
+const normalizeInspectionImage = (image: Partial<InspectionImage> | string, index: number): InspectionImage => {
+  if (typeof image === 'string') {
+    return {
+      uri: image,
+      name: getImageName(image, index),
+      type: getImageType(image),
+      base64: null,
+    };
+  }
+
+  const uri = image.uri ?? '';
+
+  return {
+    uri,
+    name: image.name ?? getImageName(uri, index),
+    type: image.type ?? getImageType(uri),
+    base64: image.base64 ?? null,
+  };
+};
 
 export const createInspectionItem = ({
   placa,
@@ -92,7 +138,9 @@ const parseStoredInspections = (raw: string | null): InspectionItem[] => {
     kilometraje: item.kilometraje ?? '',
     tipoServicio: item.tipoServicio ?? 'Avaluo',
     observaciones: item.observaciones ?? '',
-    imagenes: item.imagenes ?? [],
+    imagenes: Array.isArray(item.imagenes)
+      ? item.imagenes.map((image, index) => normalizeInspectionImage(image, index))
+      : [],
     createdAt: item.createdAt ?? new Date().toISOString(),
     syncStatus: item.syncStatus ?? 'pending',
     syncAttempts: item.syncAttempts ?? 0,
@@ -156,25 +204,6 @@ export const buildLaravelInspectionPayload = (inspection: InspectionItem): Inspe
   imagenes: inspection.imagenes,
 });
 
-const getImageName = (uri: string, index: number) => {
-  const name = uri.split('/').pop()?.split('?')[0];
-  return name || `inspeccion-${index + 1}.jpg`;
-};
-
-const getImageType = (uri: string) => {
-  const extension = uri.split('.').pop()?.toLowerCase().split('?')[0];
-
-  if (extension === 'png') {
-    return 'image/png';
-  }
-
-  if (extension === 'webp') {
-    return 'image/webp';
-  }
-
-  return 'image/jpeg';
-};
-
 export const buildLaravelInspectionFormData = (inspection: InspectionItem) => {
   const payload = buildLaravelInspectionPayload(inspection);
   const formData = new FormData();
@@ -185,12 +214,21 @@ export const buildLaravelInspectionFormData = (inspection: InspectionItem) => {
     }
   });
 
-  inspection.imagenes.forEach((uri, index) => {
-    formData.append('imagenes[]', {
-      uri,
-      name: getImageName(uri, index),
-      type: getImageType(uri),
-    } as unknown as Blob);
+  inspection.imagenes.forEach((image, index) => {
+    const normalizedImage = normalizeInspectionImage(image, index);
+
+    if (normalizedImage.base64) {
+      formData.append('imagenes[]', normalizedImage.base64);
+      return;
+    }
+
+    if (normalizedImage.uri) {
+      formData.append('imagenes[]', {
+        uri: normalizedImage.uri,
+        name: normalizedImage.name,
+        type: normalizedImage.type,
+      } as unknown as Blob);
+    }
   });
 
   return formData;
@@ -221,10 +259,7 @@ export const submitInspectionToLaravel = async (inspection: InspectionItem) => {
     `${API_URL}${INSPECTION_SAVE_PATH}`,
     buildLaravelInspectionFormData(inspection),
     {
-      headers: {
-        ...(await getAuthHeaders()),
-        'Content-Type': 'multipart/form-data',
-      },
+      headers: await getAuthHeaders(),
     },
   );
 

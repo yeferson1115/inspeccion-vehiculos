@@ -19,6 +19,7 @@ import {
   createInspectionItem,
   getStoredInspections,
   INSPECTION_SERVICE_TYPES,
+  InspectionImage,
   InspectionItem,
   InspectionServiceType,
   saveInspectionOffline,
@@ -33,6 +34,41 @@ const extractPlateFromUri = (uri: string) => {
   return match?.[0] ?? '';
 };
 
+const getImageName = (uri: string, index: number, fileName?: string | null) => {
+  if (fileName) {
+    return fileName;
+  }
+
+  const name = uri.split('/').pop()?.split('?')[0];
+  return name || `inspeccion-${index + 1}.jpg`;
+};
+
+const getImageType = (uri: string, mimeType?: string | null) => {
+  if (mimeType?.startsWith('image/')) {
+    return mimeType;
+  }
+
+  const extension = uri.split('.').pop()?.toLowerCase().split('?')[0];
+
+  if (extension === 'png') {
+    return 'image/png';
+  }
+
+  if (extension === 'webp') {
+    return 'image/webp';
+  }
+
+  return 'image/jpeg';
+};
+
+const toDataUri = (base64: string | null | undefined, type: string) => {
+  if (!base64) {
+    return null;
+  }
+
+  return base64.startsWith('data:') ? base64 : `data:${type};base64,${base64}`;
+};
+
 export default function NewInspectionScreen() {
   const { inspectionId } = useLocalSearchParams<{ inspectionId?: string }>();
   const [editingInspection, setEditingInspection] = useState<InspectionItem | null>(null);
@@ -41,7 +77,41 @@ export default function NewInspectionScreen() {
   const [tipoServicio, setTipoServicio] = useState<InspectionServiceType>('Avaluo');
   const [isServiceSelectOpen, setIsServiceSelectOpen] = useState(false);
   const [observaciones, setObservaciones] = useState('');
-  const [imagenes, setImagenes] = useState<string[]>([]);
+  const [imagenes, setImagenes] = useState<InspectionImage[]>([]);
+
+  useEffect(() => {
+    const loadInspection = async () => {
+      if (!inspectionId) {
+        setEditingInspection(null);
+        setPlaca('');
+        setKilometraje('');
+        setTipoServicio('Avaluo');
+        setIsServiceSelectOpen(false);
+        setObservaciones('');
+        setImagenes([]);
+        return;
+      }
+
+      const inspections = await getStoredInspections();
+      const inspection = inspections.find((item) => item.id === inspectionId);
+
+      if (!inspection) {
+        Alert.alert('Inspección no encontrada', 'No se encontró la inspección guardada en este dispositivo.');
+        router.replace('/');
+        return;
+      }
+
+      setEditingInspection(inspection);
+      setPlaca(inspection.placa);
+      setKilometraje(inspection.kilometraje);
+      setTipoServicio(inspection.tipoServicio);
+      setIsServiceSelectOpen(false);
+      setObservaciones(inspection.observaciones);
+      setImagenes(inspection.imagenes);
+    };
+
+    void loadInspection();
+  }, [inspectionId]);
 
   useEffect(() => {
     const loadInspection = async () => {
@@ -117,10 +187,21 @@ export default function NewInspectionScreen() {
       mediaTypes: ['images'],
       allowsEditing: false,
       quality: 0.7,
+      base64: true,
     });
 
     if (!result.canceled && result.assets[0]?.uri) {
-      setImagenes((prev) => [...prev, result.assets[0].uri]);
+      const asset = result.assets[0];
+      const index = imagenes.length;
+      const type = getImageType(asset.uri, asset.mimeType);
+      const image: InspectionImage = {
+        uri: asset.uri,
+        name: getImageName(asset.uri, index, asset.fileName),
+        type,
+        base64: toDataUri(asset.base64, type),
+      };
+
+      setImagenes((prev) => [...prev, image]);
     }
   };
 
@@ -251,8 +332,8 @@ export default function NewInspectionScreen() {
           </Pressable>
 
           <View style={styles.grid}>
-            {imagenes.map((uri) => (
-              <Image key={uri} source={{ uri }} style={styles.preview} />
+            {imagenes.map((image) => (
+              <Image key={`${image.uri}-${image.name}`} source={{ uri: image.uri }} style={styles.preview} />
             ))}
           </View>
 
