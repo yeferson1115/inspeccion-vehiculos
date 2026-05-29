@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
+  Modal,
   Platform,
   Pressable,
   SafeAreaView,
@@ -111,6 +112,9 @@ export default function NewInspectionScreen() {
   const [isServiceSelectOpen, setIsServiceSelectOpen] = useState(false);
   const [observaciones, setObservaciones] = useState('');
   const [imagenes, setImagenes] = useState<InspectionImage[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [creationAlertMessage, setCreationAlertMessage] = useState('');
+  const [isCreationAlertVisible, setIsCreationAlertVisible] = useState(false);
 
   useEffect(() => {
     const loadInspection = async () => {
@@ -228,6 +232,10 @@ export default function NewInspectionScreen() {
   };
 
   const guardar = async () => {
+    if (isSaving) {
+      return;
+    }
+
     if (!placa.trim()) {
       Alert.alert('Campo requerido', 'Debes ingresar o capturar una placa.');
       return;
@@ -241,6 +249,8 @@ export default function NewInspectionScreen() {
       observaciones,
       imagenes,
     };
+
+    setIsSaving(true);
 
     try {
       const savedItem = editingInspection
@@ -267,7 +277,21 @@ export default function NewInspectionScreen() {
         'No se pudo guardar',
         'Ocurrió un error al guardar la inspección. Intenta nuevamente.',
       );
+    } finally {
+      setIsSaving(false);
     }
+  };
+
+  const crearOtro = () => {
+    setIsCreationAlertVisible(false);
+    setCreationAlertMessage('');
+    resetForm();
+  };
+
+  const irAlListado = () => {
+    setIsCreationAlertVisible(false);
+    setCreationAlertMessage('');
+    router.replace('/');
   };
 
   const cancelar = () => {
@@ -373,8 +397,13 @@ export default function NewInspectionScreen() {
             ))}
           </View>
 
-          <Pressable style={styles.primaryButton} onPress={guardar}>
-            <Text style={styles.primaryButtonText}>{editingInspection ? 'Actualizar' : 'Guardar'}</Text>
+          <Pressable
+            style={[styles.primaryButton, isSaving ? styles.disabledButton : null]}
+            onPress={guardar}
+            disabled={isSaving}>
+            <Text style={styles.primaryButtonText}>
+              {isSaving ? 'Guardando...' : editingInspection ? 'Actualizar' : 'Guardar'}
+            </Text>
           </Pressable>
 
           <Pressable style={styles.cancelButton} onPress={cancelar}>
@@ -382,6 +411,27 @@ export default function NewInspectionScreen() {
           </Pressable>
         </View>
       </ScrollView>
+
+      <Modal
+        transparent
+        animationType="fade"
+        visible={isCreationAlertVisible}
+        onRequestClose={crearOtro}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Ingreso móvil creado</Text>
+            <Text style={styles.modalMessage}>{creationAlertMessage}</Text>
+            <View style={styles.modalActions}>
+              <Pressable style={[styles.modalButton, styles.modalSecondaryButton]} onPress={irAlListado}>
+                <Text style={styles.modalSecondaryButtonText}>No</Text>
+              </Pressable>
+              <Pressable style={[styles.modalButton, styles.modalPrimaryButton]} onPress={crearOtro}>
+                <Text style={styles.modalPrimaryButtonText}>Sí</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -472,6 +522,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  disabledButton: { opacity: 0.65 },
   primaryButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
   cancelButton: {
     marginTop: 10,
@@ -484,4 +535,33 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
   },
   cancelButtonText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#FFF',
+    borderRadius: 18,
+    padding: 22,
+  },
+  modalTitle: { color: '#B91C1C', fontSize: 22, fontWeight: '800', marginBottom: 10 },
+  modalMessage: { color: '#3F3F46', fontSize: 16, lineHeight: 22, marginBottom: 22 },
+  modalActions: { flexDirection: 'row', gap: 12, justifyContent: 'flex-end' },
+  modalButton: {
+    minWidth: 96,
+    minHeight: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  modalSecondaryButton: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#FCA5A5' },
+  modalPrimaryButton: { backgroundColor: '#E11D2E' },
+  modalSecondaryButtonText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
+  modalPrimaryButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 });
