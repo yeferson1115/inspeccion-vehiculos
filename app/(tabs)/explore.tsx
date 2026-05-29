@@ -214,6 +214,10 @@ export default function NewInspectionScreen() {
   };
 
   const guardar = async () => {
+    if (isSaving) {
+      return;
+    }
+
     if (!placa.trim()) {
       Alert.alert('Campo requerido', 'Debes ingresar o capturar una placa.');
       return;
@@ -227,6 +231,8 @@ export default function NewInspectionScreen() {
       observaciones,
       imagenes,
     };
+
+    setIsSaving(true);
 
     try {
       const savedItem = editingInspection
@@ -253,7 +259,21 @@ export default function NewInspectionScreen() {
         'No se pudo guardar',
         'Ocurrió un error al guardar la inspección. Intenta nuevamente.',
       );
+    } finally {
+      setIsSaving(false);
     }
+  };
+
+  const crearOtro = () => {
+    setIsCreationAlertVisible(false);
+    setCreationAlertMessage('');
+    resetForm();
+  };
+
+  const irAlListado = () => {
+    setIsCreationAlertVisible(false);
+    setCreationAlertMessage('');
+    router.replace('/');
   };
 
   const cancelar = () => {
@@ -359,8 +379,13 @@ export default function NewInspectionScreen() {
             ))}
           </View>
 
-          <Pressable style={styles.primaryButton} onPress={guardar}>
-            <Text style={styles.primaryButtonText}>{editingInspection ? 'Actualizar' : 'Guardar'}</Text>
+          <Pressable
+            style={[styles.primaryButton, isSaving ? styles.disabledButton : null]}
+            onPress={guardar}
+            disabled={isSaving}>
+            <Text style={styles.primaryButtonText}>
+              {isSaving ? 'Guardando...' : editingInspection ? 'Actualizar' : 'Guardar'}
+            </Text>
           </Pressable>
 
           <Pressable style={styles.cancelButton} onPress={cancelar}>
@@ -475,6 +500,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  disabledButton: { opacity: 0.65 },
   primaryButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
   cancelButton: {
     marginTop: 10,
