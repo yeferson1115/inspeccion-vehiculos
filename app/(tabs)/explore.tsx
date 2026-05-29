@@ -183,12 +183,23 @@ export default function NewInspectionScreen() {
     }
   };
 
+  const resetForm = () => {
+    setEditingInspection(null);
+    setPlaca('');
+    setKilometraje('');
+    setTipoServicio('Avaluo');
+    setIsServiceSelectOpen(false);
+    setObservaciones('');
+    setImagenes([]);
+  };
+
   const guardar = async () => {
     if (!placa.trim()) {
       Alert.alert('Campo requerido', 'Debes ingresar o capturar una placa.');
       return;
     }
 
+    const isEditing = Boolean(editingInspection);
     const inspectionData = {
       placa: normalizePlate(placa),
       kilometraje,
@@ -205,13 +216,31 @@ export default function NewInspectionScreen() {
       const syncResult = await syncPendingInspections();
       const wasSent = syncResult.sent.some((inspection) => inspection.id === savedItem.id);
       const failedSync = syncResult.failed.find((inspection) => inspection.id === savedItem.id);
+      const message = wasSent
+        ? 'El ingreso móvil se creó y se sincronizó correctamente con el servicio de Laravel.'
+        : `La inspección quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${failedSync?.lastSyncError ? ` Detalle: ${failedSync.lastSyncError}` : ''} Se intentará nuevamente cuando tengas internet.`;
+
+      if (isEditing) {
+        Alert.alert('Inspección actualizada', message, [
+          { text: 'Aceptar', onPress: () => router.replace('/') },
+        ]);
+        return;
+      }
 
       Alert.alert(
-        editingInspection ? 'Inspección actualizada' : 'Inspección guardada',
-        wasSent
-          ? 'Quedó guardada y se sincronizó automáticamente con el servicio de Laravel.'
-          : `Quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${failedSync?.lastSyncError ? ` Detalle: ${failedSync.lastSyncError}` : ''} Se intentará nuevamente cuando tengas internet.`,
-        [{ text: 'Aceptar', onPress: () => router.replace('/') }],
+        'Ingreso móvil creado',
+        `${message} ¿Deseas crear uno nuevo?`,
+        [
+          {
+            text: 'No',
+            style: 'cancel',
+            onPress: () => router.replace('/'),
+          },
+          {
+            text: 'Sí',
+            onPress: resetForm,
+          },
+        ],
       );
     } catch {
       Alert.alert(

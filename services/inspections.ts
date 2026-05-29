@@ -62,6 +62,12 @@ interface LaravelSaveResponse {
   id?: number | string;
   data?: {
     id?: number | string;
+    ingreso?: {
+      id?: number | string;
+    };
+    avaluo?: {
+      id?: number | string;
+    };
   };
 }
 
@@ -298,12 +304,18 @@ export const submitInspectionToLaravel = async (inspection: InspectionItem) => {
   return data;
 };
 
+const getSavedInspectionServerId = (response: LaravelSaveResponse) =>
+  response.id
+  ?? response.data?.id
+  ?? response.data?.ingreso?.id
+  ?? response.data?.avaluo?.id;
+
 const markInspectionAsSent = (inspection: InspectionItem, response: LaravelSaveResponse): InspectionItem => ({
   ...inspection,
   syncStatus: 'sent',
   syncedAt: new Date().toISOString(),
   lastSyncError: null,
-  serverId: response.id ?? response.data?.id ?? inspection.serverId ?? null,
+  serverId: getSavedInspectionServerId(response) ?? inspection.serverId ?? null,
 });
 
 const markInspectionAsFailed = (inspection: InspectionItem, error: unknown): InspectionItem => ({
