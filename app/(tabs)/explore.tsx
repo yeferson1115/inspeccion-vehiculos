@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -16,17 +15,7 @@ import {
 } from 'react-native';
 
 import { logout } from '@/services/auth';
-
-interface InspectionItem {
-  id: string;
-  placa: string;
-  kilometraje: string;
-  observaciones: string;
-  imagenes: string[];
-  createdAt: string;
-}
-
-const STORAGE_KEY = 'inspections';
+import { createInspectionItem, saveInspectionOffline, syncPendingInspections } from '@/services/inspections';
 
 const normalizePlate = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
 
@@ -94,20 +83,24 @@ export default function NewInspectionScreen() {
       return;
     }
 
-    const newItem: InspectionItem = {
-      id: Date.now().toString(),
+    const newItem = createInspectionItem({
       placa: normalizePlate(placa),
       kilometraje,
       observaciones,
       imagenes,
-      createdAt: new Date().toISOString(),
-    };
+    });
 
-    const current = await AsyncStorage.getItem(STORAGE_KEY);
-    const parsed: InspectionItem[] = current ? JSON.parse(current) : [];
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([newItem, ...parsed]));
+    await saveInspectionOffline(newItem);
 
-    Alert.alert('Inspección', 'Se guardó correctamente.');
+    const syncResult = await syncPendingInspections();
+    const wasSent = syncResult.sent.some((inspection) => inspection.id === newItem.id);
+
+    Alert.alert(
+      'Inspección guardada',
+      wasSent
+        ? 'Se guardó localmente y también se envió al servicio de Laravel.'
+        : 'Se guardó localmente. Cuando tengas internet podrás enviarla al servicio de Laravel desde la pantalla principal.',
+    );
     router.replace('/');
   };
 

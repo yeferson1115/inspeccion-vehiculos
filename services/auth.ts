@@ -63,6 +63,16 @@ export const getSession = async () => {
   return rawSession ? (JSON.parse(rawSession) as AuthSession) : null;
 };
 
+export const getAuthHeaders = async () => {
+  const session = await getSession();
+
+  return session?.token
+    ? {
+        Authorization: `Bearer ${session.token}`,
+      }
+    : undefined;
+};
+
 export const logout = () => AsyncStorage.removeItem(SESSION_KEY);
 
 const getMessageFromResponse = (responseData: unknown) => {

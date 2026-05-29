@@ -14,6 +14,24 @@ EXPO_PUBLIC_LOGIN_PATH=/login
 
 `EXPO_PUBLIC_API_URL` debe apuntar a la base del API de El Evaluador. Si pruebas desde un teléfono físico o emulador Android, cambia `localhost` por la IP o host accesible desde el dispositivo.
 
+
+## Configuración del guardado de inspecciones
+
+Cuando guardas una inspección, la app primero la conserva localmente en `AsyncStorage` para que puedas trabajar sin internet. Después intenta enviarla al servicio de Laravel y, si no hay conexión, queda marcada como pendiente para reenviarla desde la pantalla principal.
+
+Puedes configurar el endpoint de guardado con:
+
+```bash
+EXPO_PUBLIC_INSPECTION_SAVE_PATH=/inspecciones/movil
+```
+
+La app envía un `multipart/form-data` a `EXPO_PUBLIC_API_URL + EXPO_PUBLIC_INSPECTION_SAVE_PATH` con estos campos:
+
+- `client_id`: identificador local para evitar duplicados al reintentar.
+- `placa`, `kilometraje`, `observaciones` y `fecha_inspeccion`.
+- `origen`: valor fijo `app_movil`.
+- `imagenes[]`: archivos capturados con la cámara.
+
 ## Get started
 
 1. Install dependencies

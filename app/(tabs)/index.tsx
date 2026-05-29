@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -16,6 +17,7 @@ import {
 
 import { AvaluoMovil, getAvaluosMovil } from '@/services/avaluos';
 import { getLoginErrorMessage, getSession, login, logout } from '@/services/auth';
+import { getPendingInspectionsCount, syncPendingInspections } from '@/services/inspections';
 
 export default function LoginScreen() {
   const [user, setUser] = useState('');
@@ -28,6 +30,14 @@ export default function LoginScreen() {
   const [isLoadingAvaluos, setIsLoadingAvaluos] = useState(false);
   const [avaluosError, setAvaluosError] = useState('');
   const [search, setSearch] = useState('');
+  const [pendingInspections, setPendingInspections] = useState(0);
+  const [isSyncingInspections, setIsSyncingInspections] = useState(false);
+
+
+  const loadPendingInspections = useCallback(async () => {
+    const pendingCount = await getPendingInspectionsCount();
+    setPendingInspections(pendingCount);
+  }, []);
 
   const loadAvaluosMovil = useCallback(async (searchValue = '') => {
     setIsLoadingAvaluos(true);
@@ -50,18 +60,20 @@ export default function LoginScreen() {
       if (session) {
         setIsLoggedIn(true);
         await loadAvaluosMovil('');
+        await loadPendingInspections();
       }
     };
 
     void loadSession();
-  }, [loadAvaluosMovil]);
+  }, [loadAvaluosMovil, loadPendingInspections]);
 
   useFocusEffect(
     useCallback(() => {
       if (isLoggedIn) {
         void loadAvaluosMovil('');
+        void loadPendingInspections();
       }
-    }, [isLoggedIn, loadAvaluosMovil]),
+    }, [isLoggedIn, loadAvaluosMovil, loadPendingInspections]),
   );
 
   const handleLogin = async () => {
@@ -77,6 +89,7 @@ export default function LoginScreen() {
       await login(user, password);
       setIsLoggedIn(true);
       await loadAvaluosMovil('');
+      await loadPendingInspections();
     } catch (loginError) {
       setError(getLoginErrorMessage(loginError));
     } finally {
@@ -87,6 +100,30 @@ export default function LoginScreen() {
   const handleSearch = async () => {
     await loadAvaluosMovil(search);
   };
+
+
+  const handleSyncPendingInspections = async () => {
+    setIsSyncingInspections(true);
+
+    try {
+      const result = await syncPendingInspections();
+      setPendingInspections(result.pending.length);
+
+      Alert.alert(
+        'Sincronización de inspecciones',
+        result.pending.length === 0
+          ? `Se enviaron ${result.sent.length} inspecciones pendientes al servicio de Laravel.`
+          : `Se enviaron ${result.sent.length}. Quedan ${result.pending.length} pendientes para intentar nuevamente cuando tengas conexión.`,
+      );
+
+      if (result.sent.length > 0) {
+        await loadAvaluosMovil(search);
+      }
+    } finally {
+      setIsSyncingInspections(false);
+    }
+  };
+
 
   const formatVehicle = (item: AvaluoMovil) => {
     const ingreso = item.ingreso;
@@ -118,6 +155,7 @@ export default function LoginScreen() {
                 setIsLoggedIn(false);
                 setAvaluos([]);
                 setAvaluosTotal(0);
+                setPendingInspections(0);
               }}>
               <Ionicons name="log-out-outline" size={22} color="#FFF" />
               <Text style={styles.logoutText}>Cerrar sesión</Text>
@@ -162,6 +200,23 @@ export default function LoginScreen() {
                 <Pressable style={styles.primaryButton} onPress={() => router.push('/explore')}>
                   <Text style={styles.primaryButtonText}>Inspeccionar</Text>
                 </Pressable>
+
+
+                <View style={styles.offlineCard}>
+                  <View style={styles.offlineHeader}>
+                    <Ionicons name="cloud-upload-outline" size={22} color="#B91C1C" />
+                    <Text style={styles.offlineTitle}>Inspecciones pendientes: {pendingInspections}</Text>
+                  </View>
+                  <Text style={styles.offlineText}>
+                    Las inspecciones se guardan en este dispositivo y se enviarán al servicio de Laravel cuando tengas internet.
+                  </Text>
+                  <Pressable
+                    style={[styles.syncButton, pendingInspections === 0 || isSyncingInspections ? styles.disabledButton : null]}
+                    onPress={handleSyncPendingInspections}
+                    disabled={pendingInspections === 0 || isSyncingInspections}>
+                    <Text style={styles.syncButtonText}>{isSyncingInspections ? 'Enviando...' : 'Enviar pendientes'}</Text>
+                  </Pressable>
+                </View>
 
                 <View style={styles.listHeader}>
                   <Text style={styles.listTitle}>Avalúos trabajados ({avaluosTotal})</Text>
@@ -279,6 +334,25 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
   disabledButton: { opacity: 0.7 },
+
+  offlineCard: {
+    backgroundColor: '#FFF7ED',
+    borderColor: '#FDBA74',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 14,
+  },
+  offlineHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  offlineTitle: { color: '#9A3412', fontWeight: '700' },
+  offlineText: { color: '#7C2D12', fontSize: 12, marginBottom: 10 },
+  syncButton: {
+    backgroundColor: '#B91C1C',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  syncButtonText: { color: '#FFF', fontWeight: '700' },
   listHeader: {
     marginTop: 16,
     marginBottom: 8,
