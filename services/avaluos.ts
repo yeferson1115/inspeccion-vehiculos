@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-import { API_URL, getSession } from '@/services/auth';
+import { API_URL, getAuthHeaders } from '@/services/auth';
 
 interface IngresoMovil {
   id?: number | string;
@@ -43,16 +43,6 @@ export interface AvaluosMovilParams {
   perPage?: number;
   page?: number;
 }
-
-const getAuthHeaders = async () => {
-  const session = await getSession();
-
-  return session?.token
-    ? {
-        Authorization: `Bearer ${session.token}`,
-      }
-    : undefined;
-};
 
 export const getAvaluosMovil = async ({ search, tipo, perPage = 10, page = 1 }: AvaluosMovilParams = {}) => {
   const { data } = await axios.get<AvaluosMovilResponse>(`${API_URL}/avaluos/movil`, {
