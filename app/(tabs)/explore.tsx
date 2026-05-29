@@ -112,9 +112,7 @@ export default function NewInspectionScreen() {
   const [isServiceSelectOpen, setIsServiceSelectOpen] = useState(false);
   const [observaciones, setObservaciones] = useState('');
   const [imagenes, setImagenes] = useState<InspectionImage[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
-  const [creationAlertMessage, setCreationAlertMessage] = useState('');
-  const [isCreationAlertVisible, setIsCreationAlertVisible] = useState(false);
+  const [showSavedPrompt, setShowSavedPrompt] = useState(false);
 
   useEffect(() => {
     const loadInspection = async () => {
@@ -202,33 +200,17 @@ export default function NewInspectionScreen() {
   );
 
   const preguntarCrearOtro = () => {
-    const message = 'Ingreso móvil guardado correctamente. ¿Deseas crear uno nuevo?';
+    setShowSavedPrompt(true);
+  };
 
-    if (Platform.OS === 'web' && typeof globalThis.confirm === 'function') {
-      if (globalThis.confirm(message)) {
-        resetForm();
-        return;
-      }
+  const crearOtro = () => {
+    setShowSavedPrompt(false);
+    resetForm();
+  };
 
-      router.replace('/');
-      return;
-    }
-
-    Alert.alert(
-      'Ingreso móvil guardado',
-      message,
-      [
-        {
-          text: 'No',
-          style: 'cancel',
-          onPress: () => router.replace('/'),
-        },
-        {
-          text: 'Sí',
-          onPress: resetForm,
-        },
-      ],
-    );
+  const volverAlListado = () => {
+    setShowSavedPrompt(false);
+    router.replace('/');
   };
 
   const guardar = async () => {
@@ -412,21 +394,17 @@ export default function NewInspectionScreen() {
         </View>
       </ScrollView>
 
-      <Modal
-        transparent
-        animationType="fade"
-        visible={isCreationAlertVisible}
-        onRequestClose={crearOtro}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Ingreso móvil creado</Text>
-            <Text style={styles.modalMessage}>{creationAlertMessage}</Text>
-            <View style={styles.modalActions}>
-              <Pressable style={[styles.modalButton, styles.modalSecondaryButton]} onPress={irAlListado}>
-                <Text style={styles.modalSecondaryButtonText}>No</Text>
+      <Modal transparent animationType="fade" visible={showSavedPrompt} onRequestClose={crearOtro}>
+        <View style={styles.alertOverlay}>
+          <View style={styles.alertCard}>
+            <Text style={styles.alertTitle}>Ingreso móvil guardado</Text>
+            <Text style={styles.alertMessage}>Ingreso móvil guardado correctamente. ¿Deseas crear uno nuevo?</Text>
+            <View style={styles.alertActions}>
+              <Pressable style={[styles.alertButton, styles.alertSecondaryButton]} onPress={volverAlListado}>
+                <Text style={styles.alertSecondaryText}>No</Text>
               </Pressable>
-              <Pressable style={[styles.modalButton, styles.modalPrimaryButton]} onPress={crearOtro}>
-                <Text style={styles.modalPrimaryButtonText}>Sí</Text>
+              <Pressable style={[styles.alertButton, styles.alertPrimaryButton]} onPress={crearOtro}>
+                <Text style={styles.alertPrimaryText}>Sí</Text>
               </Pressable>
             </View>
           </View>
@@ -535,24 +513,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
   },
   cancelButtonText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
-  modalOverlay: {
+  alertOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     padding: 24,
   },
-  modalCard: {
+  alertCard: {
     width: '100%',
     maxWidth: 420,
     backgroundColor: '#FFF',
     borderRadius: 18,
     padding: 22,
   },
-  modalTitle: { color: '#B91C1C', fontSize: 22, fontWeight: '800', marginBottom: 10 },
-  modalMessage: { color: '#3F3F46', fontSize: 16, lineHeight: 22, marginBottom: 22 },
-  modalActions: { flexDirection: 'row', gap: 12, justifyContent: 'flex-end' },
-  modalButton: {
+  alertTitle: { color: '#B91C1C', fontSize: 22, fontWeight: '800', marginBottom: 10 },
+  alertMessage: { color: '#3F3F46', fontSize: 16, lineHeight: 22, marginBottom: 22 },
+  alertActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
+  alertButton: {
     minWidth: 96,
     minHeight: 44,
     borderRadius: 12,
@@ -560,8 +538,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 18,
   },
-  modalSecondaryButton: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#FCA5A5' },
-  modalPrimaryButton: { backgroundColor: '#E11D2E' },
-  modalSecondaryButtonText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
-  modalPrimaryButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  alertSecondaryButton: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#FCA5A5' },
+  alertPrimaryButton: { backgroundColor: '#E11D2E' },
+  alertSecondaryText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
+  alertPrimaryText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 });
