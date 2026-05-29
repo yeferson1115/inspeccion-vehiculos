@@ -325,6 +325,27 @@ const markInspectionAsFailed = (inspection: InspectionItem, error: unknown): Ins
   lastSyncError: getSyncErrorMessage(error),
 });
 
+export const syncInspection = async (inspection: InspectionItem) => {
+  const current = await getStoredInspections();
+  let syncedInspection: InspectionItem;
+
+  try {
+    const response = await submitInspectionToLaravel(inspection);
+    syncedInspection = markInspectionAsSent(inspection, response);
+  } catch (error) {
+    syncedInspection = markInspectionAsFailed(inspection, error);
+  }
+
+  const exists = current.some((item) => item.id === inspection.id);
+  const updated = exists
+    ? current.map((item) => (item.id === inspection.id ? syncedInspection : item))
+    : [syncedInspection, ...current];
+
+  await saveInspections(updated);
+
+  return syncedInspection;
+};
+
 export const syncPendingInspections = async (): Promise<SyncResult> => {
   const inspections = await getStoredInspections();
   const updated: InspectionItem[] = [];
