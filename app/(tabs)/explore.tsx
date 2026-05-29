@@ -197,6 +197,24 @@ export default function NewInspectionScreen() {
     setImagenes([]);
   };
 
+  const getSavedMessage = (inspection: InspectionItem) => (
+    inspection.syncStatus === 'sent'
+      ? 'El ingreso móvil se creó correctamente.'
+      : `La inspección quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${inspection.lastSyncError ? ` Detalle: ${inspection.lastSyncError}` : ''} Se intentará nuevamente cuando tengas internet.`
+  );
+
+  const sincronizarCreacion = (savedItem: InspectionItem) => {
+    void syncInspection(savedItem)
+      .then((syncedItem) => {
+        setCreationAlertMessage(`${getSavedMessage(syncedItem)} ¿Deseas crear uno nuevo?`);
+      })
+      .catch(() => {
+        setCreationAlertMessage(
+          'El ingreso quedó guardado en este dispositivo. Se intentará sincronizar nuevamente cuando tengas internet. ¿Deseas crear uno nuevo?',
+        );
+      });
+  };
+
   const guardar = async () => {
     if (isSaving) {
       return;
@@ -223,20 +241,18 @@ export default function NewInspectionScreen() {
         ? await updateInspectionOffline({ ...editingInspection, ...inspectionData })
         : await saveInspectionOffline(createInspectionItem(inspectionData));
 
-      const syncedItem = await syncInspection(savedItem);
-      const message = syncedItem.syncStatus === 'sent'
-        ? 'El ingreso móvil se creó correctamente.'
-        : `La inspección quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${syncedItem.lastSyncError ? ` Detalle: ${syncedItem.lastSyncError}` : ''} Se intentará nuevamente cuando tengas internet.`;
-
-      if (isEditing) {
-        Alert.alert('Inspección actualizada', message, [
-          { text: 'Aceptar', onPress: () => router.replace('/') },
-        ]);
+      if (!isEditing) {
+        setCreationAlertMessage('Estamos guardando el ingreso móvil. ¿Deseas crear uno nuevo?');
+        setIsCreationAlertVisible(true);
+        sincronizarCreacion(savedItem);
         return;
       }
 
-      setCreationAlertMessage(`${message} ¿Deseas crear uno nuevo?`);
-      setIsCreationAlertVisible(true);
+      const syncedItem = await syncInspection(savedItem);
+
+      Alert.alert('Inspección actualizada', getSavedMessage(syncedItem), [
+        { text: 'Aceptar', onPress: () => router.replace('/') },
+      ]);
     } catch {
       Alert.alert(
         'No se pudo guardar',
