@@ -113,6 +113,40 @@ export default function NewInspectionScreen() {
     void loadInspection();
   }, [inspectionId]);
 
+  useEffect(() => {
+    const loadInspection = async () => {
+      if (!inspectionId) {
+        setEditingInspection(null);
+        setPlaca('');
+        setKilometraje('');
+        setTipoServicio('Avaluo');
+        setIsServiceSelectOpen(false);
+        setObservaciones('');
+        setImagenes([]);
+        return;
+      }
+
+      const inspections = await getStoredInspections();
+      const inspection = inspections.find((item) => item.id === inspectionId);
+
+      if (!inspection) {
+        Alert.alert('Inspección no encontrada', 'No se encontró la inspección guardada en este dispositivo.');
+        router.replace('/');
+        return;
+      }
+
+      setEditingInspection(inspection);
+      setPlaca(inspection.placa);
+      setKilometraje(inspection.kilometraje);
+      setTipoServicio(inspection.tipoServicio);
+      setIsServiceSelectOpen(false);
+      setObservaciones(inspection.observaciones);
+      setImagenes(inspection.imagenes);
+    };
+
+    void loadInspection();
+  }, [inspectionId]);
+
   const capturarPlaca = async () => {
     const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
     if (!cameraPermission.granted) {
