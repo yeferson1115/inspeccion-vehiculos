@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -8,34 +7,15 @@ import {
   Platform,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 
+import { AvaluoMovil, getAvaluosMovil } from '@/services/avaluos';
 import { getLoginErrorMessage, getSession, login, logout } from '@/services/auth';
-
-const STORAGE_KEY = 'inspections';
-
-interface InspectionItem {
-  id: string;
-  placa: string;
-  kilometraje: string;
-  observaciones: string;
-  imagenes: string[];
-  createdAt: string;
-}
-
-const isToday = (isoDate: string) => {
-  const today = new Date();
-  const date = new Date(isoDate);
-  return (
-    today.getFullYear() === date.getFullYear() &&
-    today.getMonth() === date.getMonth() &&
-    today.getDate() === date.getDate()
-  );
-};
 
 export default function LoginScreen() {
   const [user, setUser] = useState('');
@@ -43,12 +23,25 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [todayInspections, setTodayInspections] = useState<InspectionItem[]>([]);
+  const [avaluos, setAvaluos] = useState<AvaluoMovil[]>([]);
+  const [avaluosTotal, setAvaluosTotal] = useState(0);
+  const [isLoadingAvaluos, setIsLoadingAvaluos] = useState(false);
+  const [avaluosError, setAvaluosError] = useState('');
+  const [search, setSearch] = useState('');
 
-  const loadTodayInspections = useCallback(async () => {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    const all: InspectionItem[] = raw ? JSON.parse(raw) : [];
-    setTodayInspections(all.filter((item) => isToday(item.createdAt)));
+  const loadAvaluosMovil = useCallback(async (searchValue = '') => {
+    setIsLoadingAvaluos(true);
+    setAvaluosError('');
+
+    try {
+      const response = await getAvaluosMovil({ search: searchValue, perPage: 10 });
+      setAvaluos(response.data);
+      setAvaluosTotal(response.total ?? response.data.length);
+    } catch {
+      setAvaluosError('No fue posible cargar los avalúos trabajados desde el API.');
+    } finally {
+      setIsLoadingAvaluos(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -56,19 +49,19 @@ export default function LoginScreen() {
       const session = await getSession();
       if (session) {
         setIsLoggedIn(true);
-        await loadTodayInspections();
+        await loadAvaluosMovil('');
       }
     };
 
     void loadSession();
-  }, [loadTodayInspections]);
+  }, [loadAvaluosMovil]);
 
   useFocusEffect(
     useCallback(() => {
       if (isLoggedIn) {
-        void loadTodayInspections();
+        void loadAvaluosMovil('');
       }
-    }, [isLoggedIn, loadTodayInspections]),
+    }, [isLoggedIn, loadAvaluosMovil]),
   );
 
   const handleLogin = async () => {
@@ -83,12 +76,31 @@ export default function LoginScreen() {
     try {
       await login(user, password);
       setIsLoggedIn(true);
-      await loadTodayInspections();
+      await loadAvaluosMovil('');
     } catch (loginError) {
       setError(getLoginErrorMessage(loginError));
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSearch = async () => {
+    await loadAvaluosMovil(search);
+  };
+
+  const formatVehicle = (item: AvaluoMovil) => {
+    const ingreso = item.ingreso;
+    const details = [ingreso?.marca, ingreso?.linea, ingreso?.modelo].filter(Boolean).join(' ');
+
+    return details || ingreso?.movil || 'Vehículo sin descripción';
+  };
+
+  const formatDate = (date?: string | null) => {
+    if (!date) {
+      return 'Sin fecha';
+    }
+
+    return new Date(date).toLocaleDateString('es-CO');
   };
 
   return (
@@ -104,65 +116,99 @@ export default function LoginScreen() {
               onPress={async () => {
                 await logout();
                 setIsLoggedIn(false);
+                setAvaluos([]);
+                setAvaluosTotal(0);
               }}>
               <Ionicons name="log-out-outline" size={22} color="#FFF" />
               <Text style={styles.logoutText}>Cerrar sesión</Text>
             </Pressable>
           </View>
         ) : null}
-        <View style={styles.content}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>
-          <Image source={require('@/assets/images/logo.png')} style={styles.logoImage} resizeMode="contain" />
-          <Text style={styles.brandText}>EL EVALUADOR</Text>
-          <Text style={styles.title}>Inspección Vehicular</Text>
+            <Image source={require('@/assets/images/logo.png')} style={styles.logoImage} resizeMode="contain" />
+            <Text style={styles.brandText}>EL EVALUADOR</Text>
+            <Text style={styles.title}>Inspección Vehicular</Text>
 
-          {!isLoggedIn ? (
-            <>
-              <TextInput
-                style={styles.input}
-                value={user}
-                onChangeText={setUser}
-                placeholder="Usuario"
-                placeholderTextColor="#9CA3AF"
-                autoCapitalize="none"
-              />
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Contraseña"
-                placeholderTextColor="#9CA3AF"
-                secureTextEntry
-              />
-              {error ? <Text style={styles.errorText}>{error}</Text> : null}
-              <Text style={styles.helperText}>Ingresa con el usuario registrado en el API de El Evaluador.</Text>
-              <Pressable
-                style={[styles.primaryButton, isLoading ? styles.disabledButton : null]}
-                onPress={handleLogin}
-                disabled={isLoading}>
-                <Text style={styles.primaryButtonText}>{isLoading ? 'Ingresando...' : 'Ingresar'}</Text>
-              </Pressable>
-            </>
-          ) : (
-            <>
-              <Pressable style={styles.primaryButton} onPress={() => router.push('/explore')}>
-                <Text style={styles.primaryButtonText}>Inspeccionar</Text>
-              </Pressable>
-              <Text style={styles.listTitle}>Inspecciones de hoy ({todayInspections.length})</Text>
-              {todayInspections.length === 0 ? (
-                <Text style={styles.emptyText}>No hay inspecciones registradas hoy.</Text>
-              ) : (
-                todayInspections.map((item) => (
-                  <View key={item.id} style={styles.listItem}>
-                    <Text style={styles.listPlate}>{item.placa}</Text>
-                    <Text style={styles.listMeta}>Km: {item.kilometraje || 'N/A'} · Fotos: {item.imagenes.length}</Text>
-                  </View>
-                ))
-              )}
-            </>
-          )}
+            {!isLoggedIn ? (
+              <>
+                <TextInput
+                  style={styles.input}
+                  value={user}
+                  onChangeText={setUser}
+                  placeholder="Usuario"
+                  placeholderTextColor="#9CA3AF"
+                  autoCapitalize="none"
+                />
+                <TextInput
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Contraseña"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry
+                />
+                {error ? <Text style={styles.errorText}>{error}</Text> : null}
+                <Text style={styles.helperText}>Ingresa con el usuario registrado en el API de El Evaluador.</Text>
+                <Pressable
+                  style={[styles.primaryButton, isLoading ? styles.disabledButton : null]}
+                  onPress={handleLogin}
+                  disabled={isLoading}>
+                  <Text style={styles.primaryButtonText}>{isLoading ? 'Ingresando...' : 'Ingresar'}</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Pressable style={styles.primaryButton} onPress={() => router.push('/explore')}>
+                  <Text style={styles.primaryButtonText}>Inspeccionar</Text>
+                </Pressable>
+
+                <View style={styles.listHeader}>
+                  <Text style={styles.listTitle}>Avalúos trabajados ({avaluosTotal})</Text>
+                  <Pressable style={styles.refreshButton} onPress={() => loadAvaluosMovil(search)} disabled={isLoadingAvaluos}>
+                    <Ionicons name="refresh" size={18} color="#B91C1C" />
+                    <Text style={styles.refreshText}>Actualizar</Text>
+                  </Pressable>
+                </View>
+
+                <View style={styles.searchRow}>
+                  <TextInput
+                    style={[styles.input, styles.searchInput]}
+                    value={search}
+                    onChangeText={setSearch}
+                    placeholder="Buscar placa, solicitante o documento"
+                    placeholderTextColor="#9CA3AF"
+                    autoCapitalize="characters"
+                    returnKeyType="search"
+                    onSubmitEditing={handleSearch}
+                  />
+                  <Pressable style={styles.searchButton} onPress={handleSearch} disabled={isLoadingAvaluos}>
+                    <Ionicons name="search" size={20} color="#FFF" />
+                  </Pressable>
+                </View>
+
+                {avaluosError ? <Text style={styles.errorText}>{avaluosError}</Text> : null}
+                {isLoadingAvaluos ? <Text style={styles.emptyText}>Cargando avalúos...</Text> : null}
+                {!isLoadingAvaluos && avaluos.length === 0 ? (
+                  <Text style={styles.emptyText}>No hay avalúos trabajados para mostrar.</Text>
+                ) : (
+                  avaluos.map((item) => (
+                    <View key={item.id} style={styles.listItem}>
+                      <View style={styles.listItemHeader}>
+                        <Text style={styles.listPlate}>{item.ingreso?.placa || 'Sin placa'}</Text>
+                        <Text style={styles.listDate}>{formatDate(item.updated_at)}</Text>
+                      </View>
+                      <Text style={styles.listMeta}>{formatVehicle(item)}</Text>
+                      <Text style={styles.listMeta}>Solicitante: {item.ingreso?.solicitante || 'N/A'}</Text>
+                      <Text style={styles.listMeta}>Servicio: {item.ingreso?.tiposervicio || item.tipo || 'N/A'}</Text>
+                      {item.consecutivo ? <Text style={styles.listMeta}>Consecutivo: {item.consecutivo}</Text> : null}
+                    </View>
+                  ))
+                )}
+              </>
+            )}
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -184,7 +230,7 @@ const styles = StyleSheet.create({
   topBarTitle: { color: '#FFF', fontSize: 20, fontWeight: '700' },
   logoutButton: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   logoutText: { color: '#FFF', fontWeight: '600' },
-  content: { flex: 1, justifyContent: 'center', padding: 24 },
+  content: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
@@ -233,7 +279,27 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
   disabledButton: { opacity: 0.7 },
-  listTitle: { marginTop: 16, fontWeight: '700', color: '#3F3F46', marginBottom: 8 },
+  listHeader: {
+    marginTop: 16,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  listTitle: { flex: 1, fontWeight: '700', color: '#3F3F46' },
+  refreshButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  refreshText: { color: '#B91C1C', fontWeight: '600', fontSize: 12 },
+  searchRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  searchInput: { flex: 1, marginBottom: 0 },
+  searchButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: '#E11D2E',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   emptyText: { color: '#71717A' },
   listItem: {
     backgroundColor: '#FFF1F2',
@@ -243,6 +309,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FCA5A5',
   },
+  listItemHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 2 },
   listPlate: { fontWeight: '700', color: '#B91C1C' },
+  listDate: { color: '#71717A', fontSize: 12 },
   listMeta: { color: '#52525B', marginTop: 2 },
 });
