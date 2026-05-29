@@ -145,6 +145,7 @@ export default function NewInspectionScreen() {
       mediaTypes: ['images'],
       allowsEditing: false,
       quality: 0.7,
+      base64: true,
     });
 
     if (!result.canceled && result.assets[0]?.uri) {

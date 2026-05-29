@@ -251,10 +251,7 @@ export const submitInspectionToLaravel = async (inspection: InspectionItem) => {
     `${API_URL}${INSPECTION_SAVE_PATH}`,
     buildLaravelInspectionFormData(inspection),
     {
-      headers: {
-        ...(await getAuthHeaders()),
-        'Content-Type': 'multipart/form-data',
-      },
+      headers: await getAuthHeaders(),
     },
   );
 
