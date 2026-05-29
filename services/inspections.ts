@@ -7,6 +7,7 @@ import { API_URL, getAuthHeaders } from '@/services/auth';
 export const INSPECTIONS_STORAGE_KEY = 'inspections';
 
 const INSPECTION_SAVE_PATH = process.env.EXPO_PUBLIC_INSPECTION_SAVE_PATH ?? '/ingreso/movil/guardar';
+const INSPECTION_SYNC_TIMEOUT_MS = 15000;
 
 export type InspectionSyncStatus = 'pending' | 'sent' | 'failed';
 
@@ -298,6 +299,7 @@ export const submitInspectionToLaravel = async (inspection: InspectionItem) => {
     await buildLaravelInspectionFormData(inspection),
     {
       headers: await getAuthHeaders(),
+      timeout: INSPECTION_SYNC_TIMEOUT_MS,
     },
   );
 
@@ -324,6 +326,38 @@ const markInspectionAsFailed = (inspection: InspectionItem, error: unknown): Ins
   syncAttempts: inspection.syncAttempts + 1,
   lastSyncError: getSyncErrorMessage(error),
 });
+
+
+const storeInspection = async (inspection: InspectionItem) => {
+  const current = await getStoredInspections().catch(() => []);
+  const exists = current.some((item) => item.id === inspection.id);
+  const updated = exists
+    ? current.map((item) => (item.id === inspection.id ? inspection : item))
+    : [inspection, ...current];
+
+  await saveInspections(updated);
+};
+
+export const saveInspectionWithImmediateSync = async (inspection: InspectionItem) => {
+  const pendingInspection: InspectionItem = {
+    ...inspection,
+    syncStatus: 'pending',
+    syncAttempts: 0,
+    syncedAt: null,
+    lastSyncError: null,
+  };
+
+  try {
+    const response = await submitInspectionToLaravel(pendingInspection);
+    const sentInspection = markInspectionAsSent(pendingInspection, response);
+    await storeInspection(sentInspection).catch(() => undefined);
+    return sentInspection;
+  } catch (error) {
+    const failedInspection = markInspectionAsFailed(pendingInspection, error);
+    await storeInspection(failedInspection);
+    return failedInspection;
+  }
+};
 
 export const syncInspection = async (inspection: InspectionItem) => {
   const current = await getStoredInspections();
