@@ -113,6 +113,7 @@ export default function NewInspectionScreen() {
   const [imagenes, setImagenes] = useState<InspectionImage[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [savedPromptVisible, setSavedPromptVisible] = useState(false);
+  const [savedPromptMessage, setSavedPromptMessage] = useState('Ingreso móvil guardado correctamente. ¿Deseas crear uno nuevo?');
 
   useEffect(() => {
     const loadInspection = async () => {
@@ -125,6 +126,7 @@ export default function NewInspectionScreen() {
         setObservaciones('');
         setImagenes([]);
         setSavedPromptVisible(false);
+        setSavedPromptMessage('Ingreso móvil guardado correctamente. ¿Deseas crear uno nuevo?');
         return;
       }
 
@@ -195,9 +197,15 @@ export default function NewInspectionScreen() {
     setObservaciones('');
     setImagenes([]);
     setSavedPromptVisible(false);
+    setSavedPromptMessage('Ingreso móvil guardado correctamente. ¿Deseas crear uno nuevo?');
   };
 
-  const showCreateAnotherPrompt = () => {
+  const getSyncFailureMessage = (inspection: InspectionItem) => (
+    `La inspección quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${inspection.lastSyncError ? ` Detalle: ${inspection.lastSyncError}` : ''} Se enviará automáticamente cuando haya internet.`
+  );
+
+  const showCreateAnotherPrompt = (message = 'Ingreso móvil guardado correctamente. ¿Deseas crear uno nuevo?') => {
+    setSavedPromptMessage(message);
     setSavedPromptVisible(true);
   };
 
@@ -230,23 +238,32 @@ export default function NewInspectionScreen() {
       imagenes,
     };
 
+    setSavedPromptVisible(false);
     setIsSaving(true);
 
     try {
       const savedItem = editingInspection
         ? await updateInspectionOffline({ ...editingInspection, ...inspectionData })
         : await saveInspectionOffline(createInspectionItem(inspectionData));
-
-      void syncInspection(savedItem).catch(() => undefined);
+      const syncedItem = await syncInspection(savedItem);
+      const wasSynced = syncedItem.syncStatus === 'sent';
 
       if (!isEditing) {
-        showCreateAnotherPrompt();
+        showCreateAnotherPrompt(
+          wasSynced
+            ? 'Ingreso móvil guardado y enviado correctamente al API. ¿Deseas crear uno nuevo?'
+            : `${getSyncFailureMessage(syncedItem)} ¿Deseas crear uno nuevo?`,
+        );
         return;
       }
 
-      Alert.alert('Inspección actualizada', 'La inspección se guardó correctamente.', [
-        { text: 'Aceptar', onPress: () => router.replace('/') },
-      ]);
+      Alert.alert(
+        wasSynced ? 'Inspección actualizada' : 'Inspección guardada localmente',
+        wasSynced
+          ? 'La inspección se guardó correctamente en el API.'
+          : getSyncFailureMessage(syncedItem),
+        [{ text: 'Aceptar', onPress: () => router.replace('/') }],
+      );
     } catch {
       Alert.alert(
         'No se pudo guardar',
@@ -374,6 +391,20 @@ export default function NewInspectionScreen() {
             <Text style={styles.cancelButtonText}>Cancelar</Text>
           </Pressable>
 
+          {savedPromptVisible ? (
+            <View style={styles.savedPrompt}>
+              <Text style={styles.savedPromptTitle}>Ingreso móvil guardado</Text>
+              <Text style={styles.savedPromptMessage}>{savedPromptMessage}</Text>
+              <View style={styles.savedPromptActions}>
+                <Pressable style={[styles.savedPromptButton, styles.savedPromptSecondaryButton]} onPress={handleGoToInspectionList}>
+                  <Text style={styles.savedPromptSecondaryText}>No</Text>
+                </Pressable>
+                <Pressable style={[styles.savedPromptButton, styles.savedPromptPrimaryButton]} onPress={handleCreateAnotherInspection}>
+                  <Text style={styles.savedPromptPrimaryText}>Sí</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
