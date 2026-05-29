@@ -61,14 +61,6 @@ const getImageType = (uri: string, mimeType?: string | null) => {
   return 'image/jpeg';
 };
 
-const toDataUri = (base64: string | null | undefined, type: string) => {
-  if (!base64) {
-    return null;
-  }
-
-  return base64.startsWith('data:') ? base64 : `data:${type};base64,${base64}`;
-};
-
 export default function NewInspectionScreen() {
   const { inspectionId } = useLocalSearchParams<{ inspectionId?: string }>();
   const [editingInspection, setEditingInspection] = useState<InspectionItem | null>(null);
@@ -78,40 +70,6 @@ export default function NewInspectionScreen() {
   const [isServiceSelectOpen, setIsServiceSelectOpen] = useState(false);
   const [observaciones, setObservaciones] = useState('');
   const [imagenes, setImagenes] = useState<InspectionImage[]>([]);
-
-  useEffect(() => {
-    const loadInspection = async () => {
-      if (!inspectionId) {
-        setEditingInspection(null);
-        setPlaca('');
-        setKilometraje('');
-        setTipoServicio('Avaluo');
-        setIsServiceSelectOpen(false);
-        setObservaciones('');
-        setImagenes([]);
-        return;
-      }
-
-      const inspections = await getStoredInspections();
-      const inspection = inspections.find((item) => item.id === inspectionId);
-
-      if (!inspection) {
-        Alert.alert('Inspección no encontrada', 'No se encontró la inspección guardada en este dispositivo.');
-        router.replace('/');
-        return;
-      }
-
-      setEditingInspection(inspection);
-      setPlaca(inspection.placa);
-      setKilometraje(inspection.kilometraje);
-      setTipoServicio(inspection.tipoServicio);
-      setIsServiceSelectOpen(false);
-      setObservaciones(inspection.observaciones);
-      setImagenes(inspection.imagenes);
-    };
-
-    void loadInspection();
-  }, [inspectionId]);
 
   useEffect(() => {
     const loadInspection = async () => {
@@ -198,7 +156,6 @@ export default function NewInspectionScreen() {
         uri: asset.uri,
         name: getImageName(asset.uri, index, asset.fileName),
         type,
-        base64: toDataUri(asset.base64, type),
       };
 
       setImagenes((prev) => [...prev, image]);

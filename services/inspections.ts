@@ -22,7 +22,6 @@ export interface InspectionImage {
   uri: string;
   name: string;
   type: string;
-  base64?: string | null;
 }
 
 export interface InspectionItem {
@@ -90,7 +89,6 @@ const normalizeInspectionImage = (image: Partial<InspectionImage> | string, inde
       uri: image,
       name: getImageName(image, index),
       type: getImageType(image),
-      base64: null,
     };
   }
 
@@ -100,7 +98,6 @@ const normalizeInspectionImage = (image: Partial<InspectionImage> | string, inde
     uri,
     name: image.name ?? getImageName(uri, index),
     type: image.type ?? getImageType(uri),
-    base64: image.base64 ?? null,
   };
 };
 
@@ -216,11 +213,6 @@ export const buildLaravelInspectionFormData = (inspection: InspectionItem) => {
 
   inspection.imagenes.forEach((image, index) => {
     const normalizedImage = normalizeInspectionImage(image, index);
-
-    if (normalizedImage.base64) {
-      formData.append('imagenes[]', normalizedImage.base64);
-      return;
-    }
 
     if (normalizedImage.uri) {
       formData.append('imagenes[]', {
