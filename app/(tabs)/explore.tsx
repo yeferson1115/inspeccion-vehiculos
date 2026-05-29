@@ -18,7 +18,9 @@ import { logout } from '@/services/auth';
 import {
   createInspectionItem,
   getStoredInspections,
+  INSPECTION_SERVICE_TYPES,
   InspectionItem,
+  InspectionServiceType,
   saveInspectionOffline,
   syncPendingInspections,
   updateInspectionOffline,
@@ -36,6 +38,8 @@ export default function NewInspectionScreen() {
   const [editingInspection, setEditingInspection] = useState<InspectionItem | null>(null);
   const [placa, setPlaca] = useState('');
   const [kilometraje, setKilometraje] = useState('');
+  const [tipoServicio, setTipoServicio] = useState<InspectionServiceType>('Avaluo');
+  const [isServiceSelectOpen, setIsServiceSelectOpen] = useState(false);
   const [observaciones, setObservaciones] = useState('');
   const [imagenes, setImagenes] = useState<string[]>([]);
 
@@ -45,6 +49,8 @@ export default function NewInspectionScreen() {
         setEditingInspection(null);
         setPlaca('');
         setKilometraje('');
+        setTipoServicio('Avaluo');
+        setIsServiceSelectOpen(false);
         setObservaciones('');
         setImagenes([]);
         return;
@@ -62,6 +68,8 @@ export default function NewInspectionScreen() {
       setEditingInspection(inspection);
       setPlaca(inspection.placa);
       setKilometraje(inspection.kilometraje);
+      setTipoServicio(inspection.tipoServicio);
+      setIsServiceSelectOpen(false);
       setObservaciones(inspection.observaciones);
       setImagenes(inspection.imagenes);
     };
@@ -125,6 +133,7 @@ export default function NewInspectionScreen() {
     const inspectionData = {
       placa: normalizePlate(placa),
       kilometraje,
+      tipoServicio,
       observaciones,
       imagenes,
     };
@@ -188,6 +197,46 @@ export default function NewInspectionScreen() {
             keyboardType="numeric"
             placeholder="Kilometraje"
           />
+
+          <Text style={styles.label}>Tipo de Servicio</Text>
+          <Pressable
+            style={styles.selectButton}
+            onPress={() => setIsServiceSelectOpen((current) => !current)}>
+            <Text style={styles.selectButtonText}>{tipoServicio}</Text>
+            <Ionicons
+              name={isServiceSelectOpen ? 'chevron-up-outline' : 'chevron-down-outline'}
+              size={20}
+              color="#B91C1C"
+            />
+          </Pressable>
+          {isServiceSelectOpen ? (
+            <View style={styles.selectOptions}>
+              {INSPECTION_SERVICE_TYPES.map((serviceType) => (
+                <Pressable
+                  key={serviceType}
+                  style={[
+                    styles.selectOption,
+                    tipoServicio === serviceType ? styles.selectedOption : null,
+                  ]}
+                  onPress={() => {
+                    setTipoServicio(serviceType);
+                    setIsServiceSelectOpen(false);
+                  }}>
+                  <Text
+                    style={[
+                      styles.selectOptionText,
+                      tipoServicio === serviceType ? styles.selectedOptionText : null,
+                    ]}>
+                    {serviceType}
+                  </Text>
+                  {tipoServicio === serviceType ? (
+                    <Ionicons name="checkmark-circle" size={18} color="#B91C1C" />
+                  ) : null}
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+
           <TextInput
             style={[styles.input, styles.multiline]}
             value={observaciones}
@@ -250,6 +299,41 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   multiline: { minHeight: 100, textAlignVertical: 'top' },
+  selectButton: {
+    minHeight: 50,
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectButtonText: { color: '#3F3F46', fontWeight: '600' },
+  selectOptions: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    marginTop: -4,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  selectOption: {
+    minHeight: 46,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FEE2E2',
+  },
+  selectedOption: { backgroundColor: '#FFF1F2' },
+  selectOptionText: { color: '#3F3F46', fontWeight: '500' },
+  selectedOptionText: { color: '#B91C1C', fontWeight: '700' },
   secondaryButton: {
     flexDirection: 'row',
     gap: 10,

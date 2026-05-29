@@ -179,7 +179,7 @@ export default function LoginScreen() {
       return true;
     }
 
-    return [inspection.placa, inspection.kilometraje, inspection.observaciones]
+    return [inspection.placa, inspection.kilometraje, inspection.tipoServicio, inspection.observaciones]
       .filter(Boolean)
       .some((field) => field.toLowerCase().includes(value));
   });
@@ -317,6 +317,7 @@ export default function LoginScreen() {
                         {inspection.syncStatus === 'sent' ? 'Sincronizada' : 'Guardada local'}
                       </Text>
                     </View>
+                    <Text style={styles.listMeta}>Servicio: {inspection.tipoServicio}</Text>
                     <Text style={styles.listMeta}>Kilometraje: {inspection.kilometraje || 'N/A'}</Text>
                     <Text style={styles.listMeta}>Fecha: {formatDate(inspection.createdAt)}</Text>
                     <Text style={styles.editHint}>Toca para editar y volver a sincronizar</Text>
