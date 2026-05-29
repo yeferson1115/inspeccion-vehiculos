@@ -201,6 +201,24 @@ export default function NewInspectionScreen() {
     `La inspección quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${inspection.lastSyncError ? ` Detalle: ${inspection.lastSyncError}` : ''} Intenta nuevamente cuando tengas internet.`
   );
 
+  const preguntarCrearOtro = () => {
+    Alert.alert(
+      'Ingreso móvil creado',
+      'Ingreso móvil creado correctamente. ¿Deseas crear uno nuevo?',
+      [
+        {
+          text: 'No',
+          style: 'cancel',
+          onPress: () => router.replace('/'),
+        },
+        {
+          text: 'Sí',
+          onPress: resetForm,
+        },
+      ],
+    );
+  };
+
   const guardar = async () => {
     if (isSaving) {
       return;
@@ -235,8 +253,7 @@ export default function NewInspectionScreen() {
       }
 
       if (!isEditing) {
-        setCreationAlertMessage('Ingreso móvil creado correctamente. ¿Deseas crear uno nuevo?');
-        setIsCreationAlertVisible(true);
+        preguntarCrearOtro();
         return;
       }
 
