@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
-  Modal,
   Platform,
   Pressable,
   SafeAreaView,
@@ -125,6 +124,7 @@ export default function NewInspectionScreen() {
         setIsServiceSelectOpen(false);
         setObservaciones('');
         setImagenes([]);
+        setSavedPromptVisible(false);
         return;
       }
 
@@ -194,11 +194,8 @@ export default function NewInspectionScreen() {
     setIsServiceSelectOpen(false);
     setObservaciones('');
     setImagenes([]);
+    setSavedPromptVisible(false);
   };
-
-  const getSyncFailureMessage = (inspection: InspectionItem) => (
-    `La inspección quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${inspection.lastSyncError ? ` Detalle: ${inspection.lastSyncError}` : ''} Intenta nuevamente cuando tengas internet.`
-  );
 
   const showCreateAnotherPrompt = () => {
     setSavedPromptVisible(true);
@@ -240,19 +237,14 @@ export default function NewInspectionScreen() {
         ? await updateInspectionOffline({ ...editingInspection, ...inspectionData })
         : await saveInspectionOffline(createInspectionItem(inspectionData));
 
-      const syncedItem = await syncInspection(savedItem);
-
-      if (syncedItem.syncStatus !== 'sent') {
-        Alert.alert('No se pudo sincronizar', getSyncFailureMessage(syncedItem));
-        return;
-      }
+      void syncInspection(savedItem).catch(() => undefined);
 
       if (!isEditing) {
         showCreateAnotherPrompt();
         return;
       }
 
-      Alert.alert('Inspección actualizada', 'La inspección se actualizó correctamente.', [
+      Alert.alert('Inspección actualizada', 'La inspección se guardó correctamente.', [
         { text: 'Aceptar', onPress: () => router.replace('/') },
       ]);
     } catch {
@@ -384,23 +376,6 @@ export default function NewInspectionScreen() {
 
         </View>
       </ScrollView>
-
-      <Modal transparent animationType="fade" visible={savedPromptVisible} onRequestClose={handleCreateAnotherInspection}>
-        <View style={styles.alertOverlay}>
-          <View style={styles.alertCard}>
-            <Text style={styles.alertTitle}>Ingreso móvil guardado</Text>
-            <Text style={styles.alertMessage}>Ingreso móvil guardado correctamente. ¿Deseas crear uno nuevo?</Text>
-            <View style={styles.alertActions}>
-              <Pressable style={[styles.alertButton, styles.alertSecondaryButton]} onPress={handleGoToInspectionList}>
-                <Text style={styles.alertSecondaryText}>No</Text>
-              </Pressable>
-              <Pressable style={[styles.alertButton, styles.alertPrimaryButton]} onPress={handleCreateAnotherInspection}>
-                <Text style={styles.alertPrimaryText}>Sí</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
