@@ -374,20 +374,6 @@ export default function NewInspectionScreen() {
             <Text style={styles.cancelButtonText}>Cancelar</Text>
           </Pressable>
 
-          {savedPromptVisible ? (
-            <View style={styles.savedPrompt}>
-              <Text style={styles.savedPromptTitle}>Ingreso móvil guardado</Text>
-              <Text style={styles.savedPromptMessage}>Ingreso móvil guardado correctamente. ¿Deseas crear uno nuevo?</Text>
-              <View style={styles.savedPromptActions}>
-                <Pressable style={[styles.savedPromptButton, styles.savedPromptSecondaryButton]} onPress={handleGoToInspectionList}>
-                  <Text style={styles.savedPromptSecondaryText}>No</Text>
-                </Pressable>
-                <Pressable style={[styles.savedPromptButton, styles.savedPromptPrimaryButton]} onPress={handleCreateAnotherInspection}>
-                  <Text style={styles.savedPromptPrimaryText}>Sí</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -516,4 +502,35 @@ const styles = StyleSheet.create({
   savedPromptPrimaryButton: { backgroundColor: '#E11D2E' },
   savedPromptSecondaryText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
   savedPromptPrimaryText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  alertOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  alertCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#FFF',
+    borderRadius: 18,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  alertTitle: { color: '#B91C1C', fontSize: 20, fontWeight: '800', marginBottom: 8 },
+  alertMessage: { color: '#3F3F46', fontSize: 16, lineHeight: 22, marginBottom: 18 },
+  alertActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
+  alertButton: {
+    minWidth: 96,
+    minHeight: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  alertSecondaryButton: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#FCA5A5' },
+  alertPrimaryButton: { backgroundColor: '#E11D2E' },
+  alertSecondaryText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
+  alertPrimaryText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 });
