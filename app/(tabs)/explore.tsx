@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
+  Modal,
   Platform,
   Pressable,
   SafeAreaView,
@@ -24,7 +25,7 @@ import {
   InspectionItem,
   InspectionServiceType,
   saveInspectionOffline,
-  syncPendingInspections,
+  syncInspection,
   updateInspectionOffline,
 } from '@/services/inspections';
 
@@ -111,6 +112,9 @@ export default function NewInspectionScreen() {
   const [isServiceSelectOpen, setIsServiceSelectOpen] = useState(false);
   const [observaciones, setObservaciones] = useState('');
   const [imagenes, setImagenes] = useState<InspectionImage[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [creationAlertMessage, setCreationAlertMessage] = useState('');
+  const [isCreationAlertVisible, setIsCreationAlertVisible] = useState(false);
 
   useEffect(() => {
     const loadInspection = async () => {
@@ -183,12 +187,45 @@ export default function NewInspectionScreen() {
     }
   };
 
+  const resetForm = () => {
+    setEditingInspection(null);
+    setPlaca('');
+    setKilometraje('');
+    setTipoServicio('Avaluo');
+    setIsServiceSelectOpen(false);
+    setObservaciones('');
+    setImagenes([]);
+  };
+
+  const getSavedMessage = (inspection: InspectionItem) => (
+    inspection.syncStatus === 'sent'
+      ? 'El ingreso móvil se creó correctamente.'
+      : `La inspección quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${inspection.lastSyncError ? ` Detalle: ${inspection.lastSyncError}` : ''} Se intentará nuevamente cuando tengas internet.`
+  );
+
+  const sincronizarCreacion = (savedItem: InspectionItem) => {
+    void syncInspection(savedItem)
+      .then((syncedItem) => {
+        setCreationAlertMessage(`${getSavedMessage(syncedItem)} ¿Deseas crear uno nuevo?`);
+      })
+      .catch(() => {
+        setCreationAlertMessage(
+          'El ingreso quedó guardado en este dispositivo. Se intentará sincronizar nuevamente cuando tengas internet. ¿Deseas crear uno nuevo?',
+        );
+      });
+  };
+
   const guardar = async () => {
+    if (isSaving) {
+      return;
+    }
+
     if (!placa.trim()) {
       Alert.alert('Campo requerido', 'Debes ingresar o capturar una placa.');
       return;
     }
 
+    const isEditing = Boolean(editingInspection);
     const inspectionData = {
       placa: normalizePlate(placa),
       kilometraje,
@@ -197,28 +234,45 @@ export default function NewInspectionScreen() {
       imagenes,
     };
 
+    setIsSaving(true);
+
     try {
       const savedItem = editingInspection
         ? await updateInspectionOffline({ ...editingInspection, ...inspectionData })
         : await saveInspectionOffline(createInspectionItem(inspectionData));
 
-      const syncResult = await syncPendingInspections();
-      const wasSent = syncResult.sent.some((inspection) => inspection.id === savedItem.id);
-      const failedSync = syncResult.failed.find((inspection) => inspection.id === savedItem.id);
+      if (!isEditing) {
+        setCreationAlertMessage('Estamos guardando el ingreso móvil. ¿Deseas crear uno nuevo?');
+        setIsCreationAlertVisible(true);
+        sincronizarCreacion(savedItem);
+        return;
+      }
 
-      Alert.alert(
-        editingInspection ? 'Inspección actualizada' : 'Inspección guardada',
-        wasSent
-          ? 'Quedó guardada y se sincronizó automáticamente con el servicio de Laravel.'
-          : `Quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${failedSync?.lastSyncError ? ` Detalle: ${failedSync.lastSyncError}` : ''} Se intentará nuevamente cuando tengas internet.`,
-        [{ text: 'Aceptar', onPress: () => router.replace('/') }],
-      );
+      const syncedItem = await syncInspection(savedItem);
+
+      Alert.alert('Inspección actualizada', getSavedMessage(syncedItem), [
+        { text: 'Aceptar', onPress: () => router.replace('/') },
+      ]);
     } catch {
       Alert.alert(
         'No se pudo guardar',
         'Ocurrió un error al guardar la inspección. Intenta nuevamente.',
       );
+    } finally {
+      setIsSaving(false);
     }
+  };
+
+  const crearOtro = () => {
+    setIsCreationAlertVisible(false);
+    setCreationAlertMessage('');
+    resetForm();
+  };
+
+  const irAlListado = () => {
+    setIsCreationAlertVisible(false);
+    setCreationAlertMessage('');
+    router.replace('/');
   };
 
   const cancelar = () => {
@@ -324,8 +378,13 @@ export default function NewInspectionScreen() {
             ))}
           </View>
 
-          <Pressable style={styles.primaryButton} onPress={guardar}>
-            <Text style={styles.primaryButtonText}>{editingInspection ? 'Actualizar' : 'Guardar'}</Text>
+          <Pressable
+            style={[styles.primaryButton, isSaving ? styles.disabledButton : null]}
+            onPress={guardar}
+            disabled={isSaving}>
+            <Text style={styles.primaryButtonText}>
+              {isSaving ? 'Guardando...' : editingInspection ? 'Actualizar' : 'Guardar'}
+            </Text>
           </Pressable>
 
           <Pressable style={styles.cancelButton} onPress={cancelar}>
@@ -333,6 +392,27 @@ export default function NewInspectionScreen() {
           </Pressable>
         </View>
       </ScrollView>
+
+      <Modal
+        transparent
+        animationType="fade"
+        visible={isCreationAlertVisible}
+        onRequestClose={crearOtro}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Ingreso móvil creado</Text>
+            <Text style={styles.modalMessage}>{creationAlertMessage}</Text>
+            <View style={styles.modalActions}>
+              <Pressable style={[styles.modalButton, styles.modalSecondaryButton]} onPress={irAlListado}>
+                <Text style={styles.modalSecondaryButtonText}>No</Text>
+              </Pressable>
+              <Pressable style={[styles.modalButton, styles.modalPrimaryButton]} onPress={crearOtro}>
+                <Text style={styles.modalPrimaryButtonText}>Sí</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -423,6 +503,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  disabledButton: { opacity: 0.65 },
   primaryButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
   cancelButton: {
     marginTop: 10,
@@ -435,4 +516,33 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
   },
   cancelButtonText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#FFF',
+    borderRadius: 18,
+    padding: 22,
+  },
+  modalTitle: { color: '#B91C1C', fontSize: 22, fontWeight: '800', marginBottom: 10 },
+  modalMessage: { color: '#3F3F46', fontSize: 16, lineHeight: 22, marginBottom: 22 },
+  modalActions: { flexDirection: 'row', gap: 12, justifyContent: 'flex-end' },
+  modalButton: {
+    minWidth: 96,
+    minHeight: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  modalSecondaryButton: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#FCA5A5' },
+  modalPrimaryButton: { backgroundColor: '#E11D2E' },
+  modalSecondaryButtonText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
+  modalPrimaryButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 });
