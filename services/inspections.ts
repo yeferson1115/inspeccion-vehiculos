@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import * as FileSystem from 'expo-file-system/legacy';
 
 import { API_URL, getAuthHeaders } from '@/services/auth';
 
@@ -49,7 +50,6 @@ export interface InspectionPayload {
   tiposervicio: InspectionServiceType;
   fecha_inspeccion: string;
   origen: 'app_movil';
-  imagenes: InspectionImage[];
 }
 
 export interface SyncResult {
@@ -93,6 +93,34 @@ const toDataUri = (value: string | null | undefined, type: string) => {
 };
 
 const isDownloadableImageUrl = (uri: string) => /^https?:\/\//i.test(uri);
+
+const isReadableLocalImageUri = (uri: string) => /^(file|content|asset):\/\//i.test(uri);
+
+const resolveImageData = async (image: InspectionImage, index: number) => {
+  const normalizedImage = normalizeInspectionImage(image, index);
+
+  if (normalizedImage.dataUri) {
+    return normalizedImage.dataUri;
+  }
+
+  if (isDownloadableImageUrl(normalizedImage.uri)) {
+    return normalizedImage.uri;
+  }
+
+  if (!normalizedImage.uri || !isReadableLocalImageUri(normalizedImage.uri)) {
+    return null;
+  }
+
+  try {
+    const base64 = await FileSystem.readAsStringAsync(normalizedImage.uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    return toDataUri(base64, normalizedImage.type);
+  } catch {
+    return null;
+  }
+};
 
 const normalizeInspectionImage = (
   image: (Partial<InspectionImage> & { base64?: string | null; data?: string | null }) | string,
@@ -217,30 +245,22 @@ export const buildLaravelInspectionPayload = (inspection: InspectionItem): Inspe
   tiposervicio: inspection.tipoServicio,
   fecha_inspeccion: inspection.createdAt,
   origen: 'app_movil',
-  imagenes: inspection.imagenes,
 });
 
-export const buildLaravelInspectionFormData = (inspection: InspectionItem) => {
+export const buildLaravelInspectionFormData = async (inspection: InspectionItem) => {
   const payload = buildLaravelInspectionPayload(inspection);
   const formData = new FormData();
 
   Object.entries(payload).forEach(([key, value]) => {
-    if (key !== 'imagenes') {
-      formData.append(key, String(value ?? ''));
-    }
+    formData.append(key, String(value ?? ''));
   });
 
-  inspection.imagenes.forEach((image, index) => {
-    const normalizedImage = normalizeInspectionImage(image, index);
+  const images = await Promise.all(
+    inspection.imagenes.map((image, index) => resolveImageData(image, index)),
+  );
 
-    if (normalizedImage.dataUri) {
-      formData.append('imagenes[]', normalizedImage.dataUri);
-      return;
-    }
-
-    if (isDownloadableImageUrl(normalizedImage.uri)) {
-      formData.append('imagenes[]', normalizedImage.uri);
-    }
+  images.filter((image): image is string => Boolean(image)).forEach((image) => {
+    formData.append('imagenes[]', image);
   });
 
   return formData;
@@ -269,7 +289,7 @@ const getSyncErrorMessage = (error: unknown) => {
 export const submitInspectionToLaravel = async (inspection: InspectionItem) => {
   const { data } = await axios.post<LaravelSaveResponse>(
     `${API_URL}${INSPECTION_SAVE_PATH}`,
-    buildLaravelInspectionFormData(inspection),
+    await buildLaravelInspectionFormData(inspection),
     {
       headers: await getAuthHeaders(),
     },
