@@ -7,6 +7,7 @@ import { API_URL, getAuthHeaders } from '@/services/auth';
 export const INSPECTIONS_STORAGE_KEY = 'inspections';
 
 const INSPECTION_SAVE_PATH = process.env.EXPO_PUBLIC_INSPECTION_SAVE_PATH ?? '/ingreso/movil/guardar';
+const INSPECTION_SYNC_TIMEOUT_MS = 15000;
 
 export type InspectionSyncStatus = 'pending' | 'sent' | 'failed';
 
@@ -298,6 +299,7 @@ export const submitInspectionToLaravel = async (inspection: InspectionItem) => {
     await buildLaravelInspectionFormData(inspection),
     {
       headers: await getAuthHeaders(),
+      timeout: INSPECTION_SYNC_TIMEOUT_MS,
     },
   );
 
