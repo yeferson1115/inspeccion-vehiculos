@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
+  Modal,
   Platform,
   Pressable,
   SafeAreaView,
@@ -24,7 +25,7 @@ import {
   InspectionItem,
   InspectionServiceType,
   saveInspectionOffline,
-  syncPendingInspections,
+  syncInspection,
   updateInspectionOffline,
 } from '@/services/inspections';
 
@@ -111,6 +112,7 @@ export default function NewInspectionScreen() {
   const [isServiceSelectOpen, setIsServiceSelectOpen] = useState(false);
   const [observaciones, setObservaciones] = useState('');
   const [imagenes, setImagenes] = useState<InspectionImage[]>([]);
+  const [showSavedPrompt, setShowSavedPrompt] = useState(false);
 
   useEffect(() => {
     const loadInspection = async () => {
@@ -183,12 +185,41 @@ export default function NewInspectionScreen() {
     }
   };
 
+  const resetForm = () => {
+    setEditingInspection(null);
+    setPlaca('');
+    setKilometraje('');
+    setTipoServicio('Avaluo');
+    setIsServiceSelectOpen(false);
+    setObservaciones('');
+    setImagenes([]);
+  };
+
+  const getSyncFailureMessage = (inspection: InspectionItem) => (
+    `La inspección quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${inspection.lastSyncError ? ` Detalle: ${inspection.lastSyncError}` : ''} Intenta nuevamente cuando tengas internet.`
+  );
+
+  const preguntarCrearOtro = () => {
+    setShowSavedPrompt(true);
+  };
+
+  const crearOtro = () => {
+    setShowSavedPrompt(false);
+    resetForm();
+  };
+
+  const volverAlListado = () => {
+    setShowSavedPrompt(false);
+    router.replace('/');
+  };
+
   const guardar = async () => {
     if (!placa.trim()) {
       Alert.alert('Campo requerido', 'Debes ingresar o capturar una placa.');
       return;
     }
 
+    const isEditing = Boolean(editingInspection);
     const inspectionData = {
       placa: normalizePlate(placa),
       kilometraje,
@@ -202,17 +233,21 @@ export default function NewInspectionScreen() {
         ? await updateInspectionOffline({ ...editingInspection, ...inspectionData })
         : await saveInspectionOffline(createInspectionItem(inspectionData));
 
-      const syncResult = await syncPendingInspections();
-      const wasSent = syncResult.sent.some((inspection) => inspection.id === savedItem.id);
-      const failedSync = syncResult.failed.find((inspection) => inspection.id === savedItem.id);
+      const syncedItem = await syncInspection(savedItem);
 
-      Alert.alert(
-        editingInspection ? 'Inspección actualizada' : 'Inspección guardada',
-        wasSent
-          ? 'Quedó guardada y se sincronizó automáticamente con el servicio de Laravel.'
-          : `Quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${failedSync?.lastSyncError ? ` Detalle: ${failedSync.lastSyncError}` : ''} Se intentará nuevamente cuando tengas internet.`,
-        [{ text: 'Aceptar', onPress: () => router.replace('/') }],
-      );
+      if (syncedItem.syncStatus !== 'sent') {
+        Alert.alert('No se pudo sincronizar', getSyncFailureMessage(syncedItem));
+        return;
+      }
+
+      if (!isEditing) {
+        preguntarCrearOtro();
+        return;
+      }
+
+      Alert.alert('Inspección actualizada', 'La inspección se actualizó correctamente.', [
+        { text: 'Aceptar', onPress: () => router.replace('/') },
+      ]);
     } catch {
       Alert.alert(
         'No se pudo guardar',
@@ -333,6 +368,23 @@ export default function NewInspectionScreen() {
           </Pressable>
         </View>
       </ScrollView>
+
+      <Modal transparent animationType="fade" visible={showSavedPrompt} onRequestClose={crearOtro}>
+        <View style={styles.alertOverlay}>
+          <View style={styles.alertCard}>
+            <Text style={styles.alertTitle}>Ingreso móvil guardado</Text>
+            <Text style={styles.alertMessage}>Ingreso móvil guardado correctamente. ¿Deseas crear uno nuevo?</Text>
+            <View style={styles.alertActions}>
+              <Pressable style={[styles.alertButton, styles.alertSecondaryButton]} onPress={volverAlListado}>
+                <Text style={styles.alertSecondaryText}>No</Text>
+              </Pressable>
+              <Pressable style={[styles.alertButton, styles.alertPrimaryButton]} onPress={crearOtro}>
+                <Text style={styles.alertPrimaryText}>Sí</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -435,4 +487,33 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
   },
   cancelButtonText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
+  alertOverlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    padding: 24,
+  },
+  alertCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#FFF',
+    borderRadius: 18,
+    padding: 22,
+  },
+  alertTitle: { color: '#B91C1C', fontSize: 22, fontWeight: '800', marginBottom: 10 },
+  alertMessage: { color: '#3F3F46', fontSize: 16, lineHeight: 22, marginBottom: 22 },
+  alertActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
+  alertButton: {
+    minWidth: 96,
+    minHeight: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  alertSecondaryButton: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#FCA5A5' },
+  alertPrimaryButton: { backgroundColor: '#E11D2E' },
+  alertSecondaryText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
+  alertPrimaryText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 });
