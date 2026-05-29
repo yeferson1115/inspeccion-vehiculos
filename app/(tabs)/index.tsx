@@ -3,6 +3,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -241,6 +242,9 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled">
 
           <View style={styles.card}>            
+            {!isLoggedIn ? (
+              <Image source={require('../../assets/images/logo.png')} style={styles.logoImage} resizeMode="contain" />
+            ) : null}
             <Text style={styles.title}>Inspección Vehicular</Text>
 
             {!isLoggedIn ? (
