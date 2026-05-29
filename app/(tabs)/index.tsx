@@ -3,7 +3,6 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,11 +11,11 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
+  View
 } from 'react-native';
 
-import { AvaluoMovil, getAvaluosMovil } from '@/services/avaluos';
 import { getLoginErrorMessage, getSession, login, logout } from '@/services/auth';
+import { AvaluoMovil, getAvaluosMovil } from '@/services/avaluos';
 import { getPendingInspectionsCount, syncPendingInspections } from '@/services/inspections';
 
 export default function LoginScreen() {
@@ -163,9 +162,7 @@ export default function LoginScreen() {
           </View>
         ) : null}
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={styles.card}>
-            <Image source={require('@/assets/images/logo.png')} style={styles.logoImage} resizeMode="contain" />
-            <Text style={styles.brandText}>EL EVALUADOR</Text>
+          <View style={styles.card}>            
             <Text style={styles.title}>Inspección Vehicular</Text>
 
             {!isLoggedIn ? (
