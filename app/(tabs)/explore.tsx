@@ -23,9 +23,7 @@ import {
   InspectionImage,
   InspectionItem,
   InspectionServiceType,
-  saveInspectionOffline,
-  syncInspection,
-  updateInspectionOffline,
+  saveInspectionWithImmediateSync,
 } from '@/services/inspections';
 
 const normalizePlate = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
@@ -245,17 +243,14 @@ export default function NewInspectionScreen() {
     };
 
     setSavedPromptVisible(false);
-    setSaveStatusMessage('Guardando inspección en este dispositivo...');
+    setSaveStatusMessage('Enviando inspección al API...');
     setIsSaving(true);
 
     try {
-      const savedItem = editingInspection
-        ? await updateInspectionOffline({ ...editingInspection, ...inspectionData })
-        : await saveInspectionOffline(createInspectionItem(inspectionData));
-
-      setSaveStatusMessage('Guardado local. Enviando al API...');
-
-      const syncedItem = await syncInspection(savedItem);
+      const inspection = editingInspection
+        ? { ...editingInspection, ...inspectionData }
+        : createInspectionItem(inspectionData);
+      const syncedItem = await saveInspectionWithImmediateSync(inspection);
       const wasSynced = syncedItem.syncStatus === 'sent';
       const resultMessage = wasSynced
         ? 'Ingreso móvil guardado y enviado correctamente al API.'
