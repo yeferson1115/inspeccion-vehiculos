@@ -62,6 +62,12 @@ interface LaravelSaveResponse {
   id?: number | string;
   data?: {
     id?: number | string;
+    ingreso?: {
+      id?: number | string;
+    };
+    avaluo?: {
+      id?: number | string;
+    };
   };
 }
 
@@ -298,12 +304,18 @@ export const submitInspectionToLaravel = async (inspection: InspectionItem) => {
   return data;
 };
 
+const getSavedInspectionServerId = (response: LaravelSaveResponse) =>
+  response.id
+  ?? response.data?.id
+  ?? response.data?.ingreso?.id
+  ?? response.data?.avaluo?.id;
+
 const markInspectionAsSent = (inspection: InspectionItem, response: LaravelSaveResponse): InspectionItem => ({
   ...inspection,
   syncStatus: 'sent',
   syncedAt: new Date().toISOString(),
   lastSyncError: null,
-  serverId: response.id ?? response.data?.id ?? inspection.serverId ?? null,
+  serverId: getSavedInspectionServerId(response) ?? inspection.serverId ?? null,
 });
 
 const markInspectionAsFailed = (inspection: InspectionItem, error: unknown): InspectionItem => ({
@@ -312,6 +324,27 @@ const markInspectionAsFailed = (inspection: InspectionItem, error: unknown): Ins
   syncAttempts: inspection.syncAttempts + 1,
   lastSyncError: getSyncErrorMessage(error),
 });
+
+export const syncInspection = async (inspection: InspectionItem) => {
+  const current = await getStoredInspections();
+  let syncedInspection: InspectionItem;
+
+  try {
+    const response = await submitInspectionToLaravel(inspection);
+    syncedInspection = markInspectionAsSent(inspection, response);
+  } catch (error) {
+    syncedInspection = markInspectionAsFailed(inspection, error);
+  }
+
+  const exists = current.some((item) => item.id === inspection.id);
+  const updated = exists
+    ? current.map((item) => (item.id === inspection.id ? syncedInspection : item))
+    : [syncedInspection, ...current];
+
+  await saveInspections(updated);
+
+  return syncedInspection;
+};
 
 export const syncPendingInspections = async (): Promise<SyncResult> => {
   const inspections = await getStoredInspections();
