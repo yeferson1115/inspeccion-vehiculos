@@ -61,6 +61,14 @@ const getImageType = (uri: string, mimeType?: string | null) => {
   return 'image/jpeg';
 };
 
+const toDataUri = (base64: string | null | undefined, type: string) => {
+  if (!base64) {
+    return null;
+  }
+
+  return base64.startsWith('data:') ? base64 : `data:${type};base64,${base64}`;
+};
+
 export default function NewInspectionScreen() {
   const { inspectionId } = useLocalSearchParams<{ inspectionId?: string }>();
   const [editingInspection, setEditingInspection] = useState<InspectionItem | null>(null);
@@ -156,6 +164,7 @@ export default function NewInspectionScreen() {
         uri: asset.uri,
         name: getImageName(asset.uri, index, asset.fileName),
         type,
+        dataUri: toDataUri(asset.base64, type),
       };
 
       setImagenes((prev) => [...prev, image]);

@@ -22,6 +22,7 @@ export interface InspectionImage {
   uri: string;
   name: string;
   type: string;
+  dataUri?: string | null;
 }
 
 export interface InspectionItem {
@@ -83,21 +84,39 @@ const getImageType = (uri: string) => {
   return 'image/jpeg';
 };
 
-const normalizeInspectionImage = (image: Partial<InspectionImage> | string, index: number): InspectionImage => {
+const toDataUri = (value: string | null | undefined, type: string) => {
+  if (!value) {
+    return null;
+  }
+
+  return value.startsWith('data:') ? value : `data:${type};base64,${value}`;
+};
+
+const isDownloadableImageUrl = (uri: string) => /^https?:\/\//i.test(uri);
+
+const normalizeInspectionImage = (
+  image: (Partial<InspectionImage> & { base64?: string | null; data?: string | null }) | string,
+  index: number,
+): InspectionImage => {
   if (typeof image === 'string') {
+    const type = getImageType(image);
+
     return {
       uri: image,
       name: getImageName(image, index),
-      type: getImageType(image),
+      type,
+      dataUri: image.startsWith('data:') ? image : null,
     };
   }
 
   const uri = image.uri ?? '';
+  const type = image.type ?? getImageType(uri);
 
   return {
     uri,
     name: image.name ?? getImageName(uri, index),
-    type: image.type ?? getImageType(uri),
+    type,
+    dataUri: image.dataUri ?? toDataUri(image.base64 ?? image.data, type),
   };
 };
 
@@ -214,12 +233,13 @@ export const buildLaravelInspectionFormData = (inspection: InspectionItem) => {
   inspection.imagenes.forEach((image, index) => {
     const normalizedImage = normalizeInspectionImage(image, index);
 
-    if (normalizedImage.uri) {
-      formData.append('imagenes[]', {
-        uri: normalizedImage.uri,
-        name: normalizedImage.name,
-        type: normalizedImage.type,
-      } as unknown as Blob);
+    if (normalizedImage.dataUri) {
+      formData.append('imagenes[]', normalizedImage.dataUri);
+      return;
+    }
+
+    if (isDownloadableImageUrl(normalizedImage.uri)) {
+      formData.append('imagenes[]', normalizedImage.uri);
     }
   });
 
