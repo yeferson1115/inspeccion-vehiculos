@@ -6,7 +6,7 @@ import { API_URL, getAuthHeaders } from '@/services/auth';
 
 export const INSPECTIONS_STORAGE_KEY = 'inspections';
 
-const INSPECTION_SAVE_PATH = process.env.EXPO_PUBLIC_INSPECTION_SAVE_PATH ?? '/inspecciones/movil';
+const INSPECTION_SAVE_PATH = process.env.EXPO_PUBLIC_INSPECTION_SAVE_PATH ?? '/ingreso/movil/guardar';
 
 export type InspectionSyncStatus = 'pending' | 'sent' | 'failed';
 
