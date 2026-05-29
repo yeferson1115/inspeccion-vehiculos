@@ -24,7 +24,7 @@ import {
   InspectionItem,
   InspectionServiceType,
   saveInspectionOffline,
-  syncPendingInspections,
+  syncInspection,
   updateInspectionOffline,
 } from '@/services/inspections';
 
@@ -111,6 +111,7 @@ export default function NewInspectionScreen() {
   const [isServiceSelectOpen, setIsServiceSelectOpen] = useState(false);
   const [observaciones, setObservaciones] = useState('');
   const [imagenes, setImagenes] = useState<InspectionImage[]>([]);
+  const [savedPromptVisible, setSavedPromptVisible] = useState(false);
 
   useEffect(() => {
     const loadInspection = async () => {
@@ -183,12 +184,41 @@ export default function NewInspectionScreen() {
     }
   };
 
+  const resetForm = () => {
+    setEditingInspection(null);
+    setPlaca('');
+    setKilometraje('');
+    setTipoServicio('Avaluo');
+    setIsServiceSelectOpen(false);
+    setObservaciones('');
+    setImagenes([]);
+  };
+
+  const getSyncFailureMessage = (inspection: InspectionItem) => (
+    `La inspección quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${inspection.lastSyncError ? ` Detalle: ${inspection.lastSyncError}` : ''} Intenta nuevamente cuando tengas internet.`
+  );
+
+  const showCreateAnotherPrompt = () => {
+    setSavedPromptVisible(true);
+  };
+
+  const handleCreateAnotherInspection = () => {
+    setSavedPromptVisible(false);
+    resetForm();
+  };
+
+  const handleGoToInspectionList = () => {
+    setSavedPromptVisible(false);
+    router.replace('/');
+  };
+
   const guardar = async () => {
     if (!placa.trim()) {
       Alert.alert('Campo requerido', 'Debes ingresar o capturar una placa.');
       return;
     }
 
+    const isEditing = Boolean(editingInspection);
     const inspectionData = {
       placa: normalizePlate(placa),
       kilometraje,
@@ -202,17 +232,21 @@ export default function NewInspectionScreen() {
         ? await updateInspectionOffline({ ...editingInspection, ...inspectionData })
         : await saveInspectionOffline(createInspectionItem(inspectionData));
 
-      const syncResult = await syncPendingInspections();
-      const wasSent = syncResult.sent.some((inspection) => inspection.id === savedItem.id);
-      const failedSync = syncResult.failed.find((inspection) => inspection.id === savedItem.id);
+      const syncedItem = await syncInspection(savedItem);
 
-      Alert.alert(
-        editingInspection ? 'Inspección actualizada' : 'Inspección guardada',
-        wasSent
-          ? 'Quedó guardada y se sincronizó automáticamente con el servicio de Laravel.'
-          : `Quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${failedSync?.lastSyncError ? ` Detalle: ${failedSync.lastSyncError}` : ''} Se intentará nuevamente cuando tengas internet.`,
-        [{ text: 'Aceptar', onPress: () => router.replace('/') }],
-      );
+      if (syncedItem.syncStatus !== 'sent') {
+        Alert.alert('No se pudo sincronizar', getSyncFailureMessage(syncedItem));
+        return;
+      }
+
+      if (!isEditing) {
+        showCreateAnotherPrompt();
+        return;
+      }
+
+      Alert.alert('Inspección actualizada', 'La inspección se actualizó correctamente.', [
+        { text: 'Aceptar', onPress: () => router.replace('/') },
+      ]);
     } catch {
       Alert.alert(
         'No se pudo guardar',
@@ -331,6 +365,21 @@ export default function NewInspectionScreen() {
           <Pressable style={styles.cancelButton} onPress={cancelar}>
             <Text style={styles.cancelButtonText}>Cancelar</Text>
           </Pressable>
+
+          {savedPromptVisible ? (
+            <View style={styles.savedPrompt}>
+              <Text style={styles.savedPromptTitle}>Ingreso móvil guardado</Text>
+              <Text style={styles.savedPromptMessage}>Ingreso móvil guardado correctamente. ¿Deseas crear uno nuevo?</Text>
+              <View style={styles.savedPromptActions}>
+                <Pressable style={[styles.savedPromptButton, styles.savedPromptSecondaryButton]} onPress={handleGoToInspectionList}>
+                  <Text style={styles.savedPromptSecondaryText}>No</Text>
+                </Pressable>
+                <Pressable style={[styles.savedPromptButton, styles.savedPromptPrimaryButton]} onPress={handleCreateAnotherInspection}>
+                  <Text style={styles.savedPromptPrimaryText}>Sí</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -435,4 +484,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
   },
   cancelButtonText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
+  savedPrompt: {
+    marginTop: 16,
+    backgroundColor: '#FFF',
+    borderColor: '#FCA5A5',
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 18,
+  },
+  savedPromptTitle: { color: '#B91C1C', fontSize: 20, fontWeight: '800', marginBottom: 8 },
+  savedPromptMessage: { color: '#3F3F46', fontSize: 16, lineHeight: 22, marginBottom: 18 },
+  savedPromptActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
+  savedPromptButton: {
+    minWidth: 96,
+    minHeight: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  savedPromptSecondaryButton: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#FCA5A5' },
+  savedPromptPrimaryButton: { backgroundColor: '#E11D2E' },
+  savedPromptSecondaryText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
+  savedPromptPrimaryText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 });
