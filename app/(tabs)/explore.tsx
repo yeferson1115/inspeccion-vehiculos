@@ -15,6 +15,8 @@ import {
   View,
 } from 'react-native';
 
+import { logout } from '@/services/auth';
+
 interface InspectionItem {
   id: string;
   placa: string;
@@ -25,7 +27,6 @@ interface InspectionItem {
 }
 
 const STORAGE_KEY = 'inspections';
-const SESSION_KEY = 'temp_session';
 
 const normalizePlate = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
 
@@ -115,7 +116,7 @@ export default function NewInspectionScreen() {
   };
 
   const cerrarSesion = async () => {
-    await AsyncStorage.removeItem(SESSION_KEY);
+    await logout();
     router.replace('/');
   };
 

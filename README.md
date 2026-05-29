@@ -2,6 +2,18 @@
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
+
+## Configuración del API de login
+
+El login de la app se autentica contra el endpoint de Laravel definido por variables públicas de Expo:
+
+```bash
+EXPO_PUBLIC_API_URL=http://localhost:8000/api
+EXPO_PUBLIC_LOGIN_PATH=/login
+```
+
+`EXPO_PUBLIC_API_URL` debe apuntar a la base del API de El Evaluador. Si pruebas desde un teléfono físico o emulador Android, cambia `localhost` por la IP o host accesible desde el dispositivo.
+
 ## Get started
 
 1. Install dependencies
