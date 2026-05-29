@@ -202,9 +202,21 @@ export default function NewInspectionScreen() {
   );
 
   const preguntarCrearOtro = () => {
+    const message = 'Ingreso móvil guardado correctamente. ¿Deseas crear uno nuevo?';
+
+    if (Platform.OS === 'web' && typeof globalThis.confirm === 'function') {
+      if (globalThis.confirm(message)) {
+        resetForm();
+        return;
+      }
+
+      router.replace('/');
+      return;
+    }
+
     Alert.alert(
-      'Ingreso móvil creado',
-      'Ingreso móvil creado correctamente. ¿Deseas crear uno nuevo?',
+      'Ingreso móvil guardado',
+      message,
       [
         {
           text: 'No',
