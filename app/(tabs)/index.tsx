@@ -16,7 +16,12 @@ import {
 
 import { getLoginErrorMessage, getSession, login, logout } from '@/services/auth';
 import { AvaluoMovil, getAvaluosMovil } from '@/services/avaluos';
-import { getPendingInspectionsCount, syncPendingInspections } from '@/services/inspections';
+import {
+  getPendingInspectionsCount,
+  getStoredInspections,
+  InspectionItem,
+  syncPendingInspections,
+} from '@/services/inspections';
 
 export default function LoginScreen() {
   const [user, setUser] = useState('');
@@ -28,15 +33,23 @@ export default function LoginScreen() {
   const [avaluosTotal, setAvaluosTotal] = useState(0);
   const [isLoadingAvaluos, setIsLoadingAvaluos] = useState(false);
   const [avaluosError, setAvaluosError] = useState('');
+  const [localInspections, setLocalInspections] = useState<InspectionItem[]>([]);
   const [search, setSearch] = useState('');
   const [pendingInspections, setPendingInspections] = useState(0);
   const [isSyncingInspections, setIsSyncingInspections] = useState(false);
 
 
+  const loadLocalInspections = useCallback(async () => {
+    const inspections = await getStoredInspections();
+    setLocalInspections(inspections);
+    setPendingInspections(inspections.filter((inspection) => inspection.syncStatus !== 'sent').length);
+  }, []);
+
   const loadPendingInspections = useCallback(async () => {
     const pendingCount = await getPendingInspectionsCount();
     setPendingInspections(pendingCount);
-  }, []);
+    await loadLocalInspections();
+  }, [loadLocalInspections]);
 
   const loadAvaluosMovil = useCallback(async (searchValue = '') => {
     setIsLoadingAvaluos(true);
@@ -66,14 +79,41 @@ export default function LoginScreen() {
     void loadSession();
   }, [loadAvaluosMovil, loadPendingInspections]);
 
+  const syncInspectionsSilently = useCallback(async () => {
+    try {
+      const result = await syncPendingInspections();
+      setPendingInspections(result.pending.length);
+      await loadLocalInspections();
+
+      if (result.sent.length > 0) {
+        await loadAvaluosMovil(search);
+      }
+    } catch {
+      await loadLocalInspections();
+    }
+  }, [loadAvaluosMovil, loadLocalInspections, search]);
+
   useFocusEffect(
     useCallback(() => {
       if (isLoggedIn) {
-        void loadAvaluosMovil('');
-        void loadPendingInspections();
+        void loadAvaluosMovil(search);
+        void loadLocalInspections();
+        void syncInspectionsSilently();
       }
-    }, [isLoggedIn, loadAvaluosMovil, loadPendingInspections]),
+    }, [isLoggedIn, loadAvaluosMovil, loadLocalInspections, search, syncInspectionsSilently]),
   );
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      return undefined;
+    }
+
+    const interval = setInterval(() => {
+      void syncInspectionsSilently();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [isLoggedIn, syncInspectionsSilently]);
 
   const handleLogin = async () => {
     if (!user.trim() || !password) {
@@ -107,6 +147,7 @@ export default function LoginScreen() {
     try {
       const result = await syncPendingInspections();
       setPendingInspections(result.pending.length);
+      await loadLocalInspections();
 
       Alert.alert(
         'Sincronización de inspecciones',
@@ -130,6 +171,20 @@ export default function LoginScreen() {
 
     return details || ingreso?.movil || 'Vehículo sin descripción';
   };
+
+  const filteredLocalInspections = localInspections.filter((inspection) => {
+    const value = search.trim().toLowerCase();
+
+    if (!value) {
+      return true;
+    }
+
+    return [inspection.placa, inspection.kilometraje, inspection.observaciones]
+      .filter(Boolean)
+      .some((field) => field.toLowerCase().includes(value));
+  });
+
+  const totalListedItems = avaluosTotal + filteredLocalInspections.length;
 
   const formatDate = (date?: string | null) => {
     if (!date) {
@@ -155,13 +210,18 @@ export default function LoginScreen() {
                 setAvaluos([]);
                 setAvaluosTotal(0);
                 setPendingInspections(0);
+                setLocalInspections([]);
               }}>
               <Ionicons name="log-out-outline" size={22} color="#FFF" />
               <Text style={styles.logoutText}>Cerrar sesión</Text>
             </Pressable>
           </View>
         ) : null}
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[styles.content, isLoggedIn ? styles.loggedContent : null]}
+          keyboardShouldPersistTaps="handled">
+
           <View style={styles.card}>            
             <Text style={styles.title}>Inspección Vehicular</Text>
 
@@ -201,22 +261,27 @@ export default function LoginScreen() {
 
                 <View style={styles.offlineCard}>
                   <View style={styles.offlineHeader}>
-                    <Ionicons name="cloud-upload-outline" size={22} color="#B91C1C" />
-                    <Text style={styles.offlineTitle}>Inspecciones pendientes: {pendingInspections}</Text>
+                    <View style={styles.offlineIconCircle}>
+                      <Ionicons name="cloud-done-outline" size={22} color="#B91C1C" />
+                    </View>
+                    <View style={styles.offlineHeaderText}>
+                      <Text style={styles.offlineTitle}>Guardado local automático</Text>
+                      <Text style={styles.offlineSubtitle}>{pendingInspections} pendiente(s) por sincronizar</Text>
+                    </View>
                   </View>
                   <Text style={styles.offlineText}>
-                    Las inspecciones se guardan en este dispositivo y se enviarán al servicio de Laravel cuando tengas internet.
+                    Cada inspección aparece en el listado aunque no haya internet. Puedes editarla y la app seguirá intentando sincronizarla sola con Laravel.
                   </Text>
                   <Pressable
                     style={[styles.syncButton, pendingInspections === 0 || isSyncingInspections ? styles.disabledButton : null]}
                     onPress={handleSyncPendingInspections}
                     disabled={pendingInspections === 0 || isSyncingInspections}>
-                    <Text style={styles.syncButtonText}>{isSyncingInspections ? 'Enviando...' : 'Enviar pendientes'}</Text>
+                    <Text style={styles.syncButtonText}>{isSyncingInspections ? 'Sincronizando...' : 'Sincronizar ahora'}</Text>
                   </Pressable>
                 </View>
 
                 <View style={styles.listHeader}>
-                  <Text style={styles.listTitle}>Avalúos trabajados ({avaluosTotal})</Text>
+                  <Text style={styles.listTitle}>Listado de inspecciones ({totalListedItems})</Text>
                   <Pressable style={styles.refreshButton} onPress={() => loadAvaluosMovil(search)} disabled={isLoadingAvaluos}>
                     <Ionicons name="refresh" size={18} color="#B91C1C" />
                     <Text style={styles.refreshText}>Actualizar</Text>
@@ -241,8 +306,25 @@ export default function LoginScreen() {
 
                 {avaluosError ? <Text style={styles.errorText}>{avaluosError}</Text> : null}
                 {isLoadingAvaluos ? <Text style={styles.emptyText}>Cargando avalúos...</Text> : null}
-                {!isLoadingAvaluos && avaluos.length === 0 ? (
-                  <Text style={styles.emptyText}>No hay avalúos trabajados para mostrar.</Text>
+                {filteredLocalInspections.map((inspection) => (
+                  <Pressable
+                    key={inspection.id}
+                    style={[styles.listItem, styles.localListItem]}
+                    onPress={() => router.push({ pathname: '/explore', params: { inspectionId: inspection.id } })}>
+                    <View style={styles.listItemHeader}>
+                      <Text style={styles.listPlate}>{inspection.placa || 'Sin placa'}</Text>
+                      <Text style={styles.localBadge}>
+                        {inspection.syncStatus === 'sent' ? 'Sincronizada' : 'Guardada local'}
+                      </Text>
+                    </View>
+                    <Text style={styles.listMeta}>Kilometraje: {inspection.kilometraje || 'N/A'}</Text>
+                    <Text style={styles.listMeta}>Fecha: {formatDate(inspection.createdAt)}</Text>
+                    <Text style={styles.editHint}>Toca para editar y volver a sincronizar</Text>
+                  </Pressable>
+                ))}
+
+                {!isLoadingAvaluos && avaluos.length === 0 && filteredLocalInspections.length === 0 ? (
+                  <Text style={styles.emptyText}>No hay inspecciones para mostrar.</Text>
                 ) : (
                   avaluos.map((item) => (
                     <View key={item.id} style={styles.listItem}>
@@ -282,14 +364,20 @@ const styles = StyleSheet.create({
   topBarTitle: { color: '#FFF', fontSize: 20, fontWeight: '700' },
   logoutButton: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   logoutText: { color: '#FFF', fontWeight: '600' },
+  scroll: { flex: 1 },
   content: { flexGrow: 1, justifyContent: 'center', padding: 24 },
+  loggedContent: { justifyContent: 'flex-start', paddingTop: 8, paddingBottom: 28 },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
     padding: 24,
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
     shadowColor: '#991B1B',
     shadowOpacity: 0.15,
     shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
     elevation: 8,
   },
   logoMark: {
@@ -336,13 +424,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF7ED',
     borderColor: '#FDBA74',
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 18,
+    padding: 14,
     marginTop: 14,
   },
-  offlineHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  offlineTitle: { color: '#9A3412', fontWeight: '700' },
-  offlineText: { color: '#7C2D12', fontSize: 12, marginBottom: 10 },
+  offlineHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+  offlineIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offlineHeaderText: { flex: 1 },
+  offlineTitle: { color: '#9A3412', fontWeight: '800', fontSize: 15 },
+  offlineSubtitle: { color: '#B91C1C', fontWeight: '600', fontSize: 12, marginTop: 2 },
+  offlineText: { color: '#7C2D12', fontSize: 12, lineHeight: 18, marginBottom: 10 },
   syncButton: {
     backgroundColor: '#B91C1C',
     borderRadius: 10,
@@ -380,8 +478,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FCA5A5',
   },
+  localListItem: { backgroundColor: '#FFFFFF', borderColor: '#F87171' },
   listItemHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 2 },
   listPlate: { fontWeight: '700', color: '#B91C1C' },
   listDate: { color: '#71717A', fontSize: 12 },
   listMeta: { color: '#52525B', marginTop: 2 },
+  localBadge: {
+    backgroundColor: '#FEE2E2',
+    color: '#991B1B',
+    fontSize: 11,
+    fontWeight: '700',
+    overflow: 'hidden',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  editHint: { color: '#B91C1C', fontSize: 12, fontWeight: '600', marginTop: 8 },
 });

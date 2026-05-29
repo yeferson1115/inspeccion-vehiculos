@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
@@ -15,7 +15,14 @@ import {
 } from 'react-native';
 
 import { logout } from '@/services/auth';
-import { createInspectionItem, saveInspectionOffline, syncPendingInspections } from '@/services/inspections';
+import {
+  createInspectionItem,
+  getStoredInspections,
+  InspectionItem,
+  saveInspectionOffline,
+  syncPendingInspections,
+  updateInspectionOffline,
+} from '@/services/inspections';
 
 const normalizePlate = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
 
@@ -25,10 +32,42 @@ const extractPlateFromUri = (uri: string) => {
 };
 
 export default function NewInspectionScreen() {
+  const { inspectionId } = useLocalSearchParams<{ inspectionId?: string }>();
+  const [editingInspection, setEditingInspection] = useState<InspectionItem | null>(null);
   const [placa, setPlaca] = useState('');
   const [kilometraje, setKilometraje] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [imagenes, setImagenes] = useState<string[]>([]);
+
+  useEffect(() => {
+    const loadInspection = async () => {
+      if (!inspectionId) {
+        setEditingInspection(null);
+        setPlaca('');
+        setKilometraje('');
+        setObservaciones('');
+        setImagenes([]);
+        return;
+      }
+
+      const inspections = await getStoredInspections();
+      const inspection = inspections.find((item) => item.id === inspectionId);
+
+      if (!inspection) {
+        Alert.alert('Inspección no encontrada', 'No se encontró la inspección guardada en este dispositivo.');
+        router.replace('/');
+        return;
+      }
+
+      setEditingInspection(inspection);
+      setPlaca(inspection.placa);
+      setKilometraje(inspection.kilometraje);
+      setObservaciones(inspection.observaciones);
+      setImagenes(inspection.imagenes);
+    };
+
+    void loadInspection();
+  }, [inspectionId]);
 
   const capturarPlaca = async () => {
     const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
@@ -83,23 +122,24 @@ export default function NewInspectionScreen() {
       return;
     }
 
-    const newItem = createInspectionItem({
+    const inspectionData = {
       placa: normalizePlate(placa),
       kilometraje,
       observaciones,
       imagenes,
-    });
-
-    await saveInspectionOffline(newItem);
+    };
+    const savedItem = editingInspection
+      ? await updateInspectionOffline({ ...editingInspection, ...inspectionData })
+      : await saveInspectionOffline(createInspectionItem(inspectionData));
 
     const syncResult = await syncPendingInspections();
-    const wasSent = syncResult.sent.some((inspection) => inspection.id === newItem.id);
+    const wasSent = syncResult.sent.some((inspection) => inspection.id === savedItem.id);
 
     Alert.alert(
-      'Inspección guardada',
+      editingInspection ? 'Inspección actualizada' : 'Inspección guardada',
       wasSent
-        ? 'Se guardó localmente y también se envió al servicio de Laravel.'
-        : 'Se guardó localmente. Cuando tengas internet podrás enviarla al servicio de Laravel desde la pantalla principal.',
+        ? 'Quedó guardada en el dispositivo y se sincronizó automáticamente con el servicio de Laravel.'
+        : 'Quedó guardada en este dispositivo. Se sincronizará automáticamente cuando tengas internet.',
     );
     router.replace('/');
   };
@@ -115,7 +155,7 @@ export default function NewInspectionScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.topBar}>
           <Text style={styles.topBarTitle}></Text>
           <Pressable style={styles.logoutButton} onPress={cerrarSesion}>
@@ -125,51 +165,51 @@ export default function NewInspectionScreen() {
         </View>
 
         <View style={styles.formContent}>
-          <Text style={styles.title}>Nueva inspección</Text>
+          <Text style={styles.title}>{editingInspection ? 'Editar inspección' : 'Nueva inspección'}</Text>
 
-        <Text style={styles.label}>Placa</Text>
-        <TextInput
-          style={styles.input}
-          value={placa}
-          onChangeText={(text) => setPlaca(normalizePlate(text))}
-          placeholder="Número de placa"
-          autoCapitalize="characters"
-        />
+          <Text style={styles.label}>Placa</Text>
+          <TextInput
+            style={styles.input}
+            value={placa}
+            onChangeText={(text) => setPlaca(normalizePlate(text))}
+            placeholder="Número de placa"
+            autoCapitalize="characters"
+          />
 
-        <Pressable style={styles.secondaryButton} onPress={capturarPlaca}>
-          <Ionicons name="camera-outline" size={20} color="#B91C1C" />
-          <Text style={styles.secondaryButtonText}>Tomar foto para reconocer placa</Text>
-        </Pressable>
+          <Pressable style={styles.secondaryButton} onPress={capturarPlaca}>
+            <Ionicons name="camera-outline" size={20} color="#B91C1C" />
+            <Text style={styles.secondaryButtonText}>Tomar foto para reconocer placa</Text>
+          </Pressable>
 
-        <TextInput
-          style={styles.input}
-          value={kilometraje}
-          onChangeText={setKilometraje}
-          keyboardType="numeric"
-          placeholder="Kilometraje"
-        />
-        <TextInput
-          style={[styles.input, styles.multiline]}
-          value={observaciones}
-          onChangeText={setObservaciones}
-          placeholder="Observaciones"
-          multiline
-        />
+          <TextInput
+            style={styles.input}
+            value={kilometraje}
+            onChangeText={setKilometraje}
+            keyboardType="numeric"
+            placeholder="Kilometraje"
+          />
+          <TextInput
+            style={[styles.input, styles.multiline]}
+            value={observaciones}
+            onChangeText={setObservaciones}
+            placeholder="Observaciones"
+            multiline
+          />
 
-        <Pressable style={styles.secondaryButton} onPress={agregarImagen}>
-          <Ionicons name="camera-reverse-outline" size={20} color="#B91C1C" />
-          <Text style={styles.secondaryButtonText}>Cargar imagen con cámara ({imagenes.length}/10)</Text>
-        </Pressable>
+          <Pressable style={styles.secondaryButton} onPress={agregarImagen}>
+            <Ionicons name="camera-reverse-outline" size={20} color="#B91C1C" />
+            <Text style={styles.secondaryButtonText}>Cargar imagen con cámara ({imagenes.length}/10)</Text>
+          </Pressable>
 
-        <View style={styles.grid}>
-          {imagenes.map((uri) => (
-            <Image key={uri} source={{ uri }} style={styles.preview} />
-          ))}
-        </View>
+          <View style={styles.grid}>
+            {imagenes.map((uri) => (
+              <Image key={uri} source={{ uri }} style={styles.preview} />
+            ))}
+          </View>
 
-        <Pressable style={styles.primaryButton} onPress={guardar}>
-          <Text style={styles.primaryButtonText}>Guardar</Text>
-        </Pressable>
+          <Pressable style={styles.primaryButton} onPress={guardar}>
+            <Text style={styles.primaryButtonText}>{editingInspection ? 'Actualizar' : 'Guardar'}</Text>
+          </Pressable>
 
           <Pressable style={styles.cancelButton} onPress={cancelar}>
             <Text style={styles.cancelButtonText}>Cancelar</Text>
@@ -182,7 +222,8 @@ export default function NewInspectionScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F5F5F5' },
-  container: { paddingBottom: 32 },
+  scroll: { flex: 1 },
+  container: { flexGrow: 1, paddingBottom: 32 },
   topBar: {
     backgroundColor: '#DC2626',
     paddingHorizontal: 14,
