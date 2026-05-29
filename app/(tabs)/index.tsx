@@ -173,6 +173,10 @@ export default function LoginScreen() {
   };
 
   const filteredLocalInspections = localInspections.filter((inspection) => {
+    if (inspection.syncStatus === 'sent') {
+      return false;
+    }
+
     const value = search.trim().toLowerCase();
 
     if (!value) {
@@ -259,26 +263,28 @@ export default function LoginScreen() {
                 </Pressable>
 
 
-                <View style={styles.offlineCard}>
-                  <View style={styles.offlineHeader}>
-                    <View style={styles.offlineIconCircle}>
-                      <Ionicons name="cloud-done-outline" size={22} color="#B91C1C" />
+                {pendingInspections > 0 ? (
+                  <View style={styles.offlineCard}>
+                    <View style={styles.offlineHeader}>
+                      <View style={styles.offlineIconCircle}>
+                        <Ionicons name="cloud-done-outline" size={22} color="#B91C1C" />
+                      </View>
+                      <View style={styles.offlineHeaderText}>
+                        <Text style={styles.offlineTitle}>Guardado local automático</Text>
+                        <Text style={styles.offlineSubtitle}>{pendingInspections} pendiente(s) por sincronizar</Text>
+                      </View>
                     </View>
-                    <View style={styles.offlineHeaderText}>
-                      <Text style={styles.offlineTitle}>Guardado local automático</Text>
-                      <Text style={styles.offlineSubtitle}>{pendingInspections} pendiente(s) por sincronizar</Text>
-                    </View>
+                    <Text style={styles.offlineText}>
+                      Cada inspección pendiente aparece en el listado aunque no haya internet. Puedes editarla y la app seguirá intentando sincronizarla sola con Laravel.
+                    </Text>
+                    <Pressable
+                      style={[styles.syncButton, isSyncingInspections ? styles.disabledButton : null]}
+                      onPress={handleSyncPendingInspections}
+                      disabled={isSyncingInspections}>
+                      <Text style={styles.syncButtonText}>{isSyncingInspections ? 'Sincronizando...' : 'Sincronizar ahora'}</Text>
+                    </Pressable>
                   </View>
-                  <Text style={styles.offlineText}>
-                    Cada inspección aparece en el listado aunque no haya internet. Puedes editarla y la app seguirá intentando sincronizarla sola con Laravel.
-                  </Text>
-                  <Pressable
-                    style={[styles.syncButton, pendingInspections === 0 || isSyncingInspections ? styles.disabledButton : null]}
-                    onPress={handleSyncPendingInspections}
-                    disabled={pendingInspections === 0 || isSyncingInspections}>
-                    <Text style={styles.syncButtonText}>{isSyncingInspections ? 'Sincronizando...' : 'Sincronizar ahora'}</Text>
-                  </Pressable>
-                </View>
+                ) : null}
 
                 <View style={styles.listHeader}>
                   <Text style={styles.listTitle}>Listado de inspecciones ({totalListedItems})</Text>

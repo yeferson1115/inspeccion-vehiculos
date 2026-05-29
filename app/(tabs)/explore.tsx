@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -69,6 +70,38 @@ const toDataUri = (base64: string | null | undefined, type: string) => {
   return base64.startsWith('data:') ? base64 : `data:${type};base64,${base64}`;
 };
 
+const pickImage = async ({ base64 = false }: { base64?: boolean } = {}) => {
+  if (Platform.OS === 'ios' || Platform.OS === 'android') {
+    const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+
+    if (!cameraPermission.granted) {
+      Alert.alert('Permiso requerido', 'Debes permitir acceso a la cámara.');
+      return null;
+    }
+
+    return ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      allowsEditing: false,
+      quality: base64 ? 0.7 : 0.8,
+      base64,
+    });
+  }
+
+  const mediaLibraryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+  if (!mediaLibraryPermission.granted) {
+    Alert.alert('Permiso requerido', 'Debes permitir acceso a las imágenes.');
+    return null;
+  }
+
+  return ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsEditing: false,
+    quality: base64 ? 0.7 : 0.8,
+    base64,
+  });
+};
+
 export default function NewInspectionScreen() {
   const { inspectionId } = useLocalSearchParams<{ inspectionId?: string }>();
   const [editingInspection, setEditingInspection] = useState<InspectionItem | null>(null);
@@ -114,19 +147,9 @@ export default function NewInspectionScreen() {
   }, [inspectionId]);
 
   const capturarPlaca = async () => {
-    const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!cameraPermission.granted) {
-      Alert.alert('Permiso requerido', 'Debes permitir acceso a la cámara.');
-      return;
-    }
+    const result = await pickImage();
 
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      allowsEditing: false,
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets[0]?.uri) {
+    if (result && !result.canceled && result.assets[0]?.uri) {
       const detectedPlate = extractPlateFromUri(result.assets[0].uri);
       if (detectedPlate) {
         setPlaca(detectedPlate);
@@ -143,20 +166,9 @@ export default function NewInspectionScreen() {
       return;
     }
 
-    const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!cameraPermission.granted) {
-      Alert.alert('Permiso requerido', 'Debes permitir acceso a la cámara.');
-      return;
-    }
+    const result = await pickImage({ base64: true });
 
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      allowsEditing: false,
-      quality: 0.7,
-      base64: true,
-    });
-
-    if (!result.canceled && result.assets[0]?.uri) {
+    if (result && !result.canceled && result.assets[0]?.uri) {
       const asset = result.assets[0];
       const index = imagenes.length;
       const type = getImageType(asset.uri, asset.mimeType);
@@ -184,20 +196,29 @@ export default function NewInspectionScreen() {
       observaciones,
       imagenes,
     };
-    const savedItem = editingInspection
-      ? await updateInspectionOffline({ ...editingInspection, ...inspectionData })
-      : await saveInspectionOffline(createInspectionItem(inspectionData));
 
-    const syncResult = await syncPendingInspections();
-    const wasSent = syncResult.sent.some((inspection) => inspection.id === savedItem.id);
+    try {
+      const savedItem = editingInspection
+        ? await updateInspectionOffline({ ...editingInspection, ...inspectionData })
+        : await saveInspectionOffline(createInspectionItem(inspectionData));
 
-    Alert.alert(
-      editingInspection ? 'Inspección actualizada' : 'Inspección guardada',
-      wasSent
-        ? 'Quedó guardada en el dispositivo y se sincronizó automáticamente con el servicio de Laravel.'
-        : 'Quedó guardada en este dispositivo. Se sincronizará automáticamente cuando tengas internet.',
-    );
-    router.replace('/');
+      const syncResult = await syncPendingInspections();
+      const wasSent = syncResult.sent.some((inspection) => inspection.id === savedItem.id);
+      const failedSync = syncResult.failed.find((inspection) => inspection.id === savedItem.id);
+
+      Alert.alert(
+        editingInspection ? 'Inspección actualizada' : 'Inspección guardada',
+        wasSent
+          ? 'Quedó guardada y se sincronizó automáticamente con el servicio de Laravel.'
+          : `Quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${failedSync?.lastSyncError ? ` Detalle: ${failedSync.lastSyncError}` : ''} Se intentará nuevamente cuando tengas internet.`,
+        [{ text: 'Aceptar', onPress: () => router.replace('/') }],
+      );
+    } catch {
+      Alert.alert(
+        'No se pudo guardar',
+        'Ocurrió un error al guardar la inspección. Intenta nuevamente.',
+      );
+    }
   };
 
   const cancelar = () => {
