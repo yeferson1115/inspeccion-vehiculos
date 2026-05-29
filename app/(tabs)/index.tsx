@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect, router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -14,10 +14,9 @@ import {
   View,
 } from 'react-native';
 
-const TEMP_USER = 'inspector';
-const TEMP_PASSWORD = '123456';
+import { getLoginErrorMessage, getSession, login, logout } from '@/services/auth';
+
 const STORAGE_KEY = 'inspections';
-const SESSION_KEY = 'temp_session';
 
 interface InspectionItem {
   id: string;
@@ -42,6 +41,7 @@ export default function LoginScreen() {
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [todayInspections, setTodayInspections] = useState<InspectionItem[]>([]);
 
@@ -53,8 +53,8 @@ export default function LoginScreen() {
 
   useEffect(() => {
     const loadSession = async () => {
-      const session = await AsyncStorage.getItem(SESSION_KEY);
-      if (session === 'active') {
+      const session = await getSession();
+      if (session) {
         setIsLoggedIn(true);
         await loadTodayInspections();
       }
@@ -72,15 +72,23 @@ export default function LoginScreen() {
   );
 
   const handleLogin = async () => {
-    if (user.trim() === TEMP_USER && password === TEMP_PASSWORD) {
-      await AsyncStorage.setItem('temp_session', 'active');
-      setError('');
-      setIsLoggedIn(true);
-      await loadTodayInspections();
+    if (!user.trim() || !password) {
+      setError('Ingresa usuario y contraseña.');
       return;
     }
 
-    setError('Usuario o contraseña inválidos.');
+    setIsLoading(true);
+    setError('');
+
+    try {
+      await login(user, password);
+      setIsLoggedIn(true);
+      await loadTodayInspections();
+    } catch (loginError) {
+      setError(getLoginErrorMessage(loginError));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -91,7 +99,12 @@ export default function LoginScreen() {
         {isLoggedIn ? (
           <View style={styles.topBar}>
             <Text style={styles.topBarTitle}>inspeccor</Text>
-            <Pressable style={styles.logoutButton} onPress={async () => { await AsyncStorage.removeItem(SESSION_KEY); setIsLoggedIn(false); }}>
+            <Pressable
+              style={styles.logoutButton}
+              onPress={async () => {
+                await logout();
+                setIsLoggedIn(false);
+              }}>
               <Ionicons name="log-out-outline" size={22} color="#FFF" />
               <Text style={styles.logoutText}>Cerrar sesión</Text>
             </Pressable>
@@ -122,9 +135,12 @@ export default function LoginScreen() {
                 secureTextEntry
               />
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
-              <Text style={styles.helperText}>Temporal: inspector / 123456</Text>
-              <Pressable style={styles.primaryButton} onPress={handleLogin}>
-                <Text style={styles.primaryButtonText}>Ingresar</Text>
+              <Text style={styles.helperText}>Ingresa con el usuario registrado en el API de El Evaluador.</Text>
+              <Pressable
+                style={[styles.primaryButton, isLoading ? styles.disabledButton : null]}
+                onPress={handleLogin}
+                disabled={isLoading}>
+                <Text style={styles.primaryButtonText}>{isLoading ? 'Ingresando...' : 'Ingresar'}</Text>
               </Pressable>
             </>
           ) : (
@@ -216,6 +232,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   primaryButtonText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
+  disabledButton: { opacity: 0.7 },
   listTitle: { marginTop: 16, fontWeight: '700', color: '#3F3F46', marginBottom: 8 },
   emptyText: { color: '#71717A' },
   listItem: {
