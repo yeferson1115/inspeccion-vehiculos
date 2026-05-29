@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import * as FileSystem from 'expo-file-system/legacy';
 
 import { API_URL, getAuthHeaders } from '@/services/auth';
 
@@ -9,12 +10,29 @@ const INSPECTION_SAVE_PATH = process.env.EXPO_PUBLIC_INSPECTION_SAVE_PATH ?? '/i
 
 export type InspectionSyncStatus = 'pending' | 'sent' | 'failed';
 
+export type InspectionServiceType = 'Avaluo' | 'Inspección' | 'Avaluo e Inspección' | 'Sec Bogota';
+
+export const INSPECTION_SERVICE_TYPES: InspectionServiceType[] = [
+  'Avaluo',
+  'Inspección',
+  'Avaluo e Inspección',
+  'Sec Bogota',
+];
+
+export interface InspectionImage {
+  uri: string;
+  name: string;
+  type: string;
+  dataUri?: string | null;
+}
+
 export interface InspectionItem {
   id: string;
   placa: string;
   kilometraje: string;
+  tipoServicio: InspectionServiceType;
   observaciones: string;
-  imagenes: string[];
+  imagenes: InspectionImage[];
   createdAt: string;
   syncStatus: InspectionSyncStatus;
   syncAttempts: number;
@@ -28,9 +46,10 @@ export interface InspectionPayload {
   placa: string;
   kilometraje: string;
   observaciones: string;
+  tipo_servicio: InspectionServiceType;
+  tiposervicio: InspectionServiceType;
   fecha_inspeccion: string;
   origen: 'app_movil';
-  imagenes: string[];
 }
 
 export interface SyncResult {
@@ -46,15 +65,100 @@ interface LaravelSaveResponse {
   };
 }
 
+const getImageName = (uri: string, index: number) => {
+  const name = uri.split('/').pop()?.split('?')[0];
+  return name || `inspeccion-${index + 1}.jpg`;
+};
+
+const getImageType = (uri: string) => {
+  const extension = uri.split('.').pop()?.toLowerCase().split('?')[0];
+
+  if (extension === 'png') {
+    return 'image/png';
+  }
+
+  if (extension === 'webp') {
+    return 'image/webp';
+  }
+
+  return 'image/jpeg';
+};
+
+const toDataUri = (value: string | null | undefined, type: string) => {
+  if (!value) {
+    return null;
+  }
+
+  return value.startsWith('data:') ? value : `data:${type};base64,${value}`;
+};
+
+const isDownloadableImageUrl = (uri: string) => /^https?:\/\//i.test(uri);
+
+const isReadableLocalImageUri = (uri: string) => /^(file|content|asset):\/\//i.test(uri);
+
+const resolveImageData = async (image: InspectionImage, index: number) => {
+  const normalizedImage = normalizeInspectionImage(image, index);
+
+  if (normalizedImage.dataUri) {
+    return normalizedImage.dataUri;
+  }
+
+  if (isDownloadableImageUrl(normalizedImage.uri)) {
+    return normalizedImage.uri;
+  }
+
+  if (!normalizedImage.uri || !isReadableLocalImageUri(normalizedImage.uri)) {
+    return null;
+  }
+
+  try {
+    const base64 = await FileSystem.readAsStringAsync(normalizedImage.uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    return toDataUri(base64, normalizedImage.type);
+  } catch {
+    return null;
+  }
+};
+
+const normalizeInspectionImage = (
+  image: (Partial<InspectionImage> & { base64?: string | null; data?: string | null }) | string,
+  index: number,
+): InspectionImage => {
+  if (typeof image === 'string') {
+    const type = getImageType(image);
+
+    return {
+      uri: image,
+      name: getImageName(image, index),
+      type,
+      dataUri: image.startsWith('data:') ? image : null,
+    };
+  }
+
+  const uri = image.uri ?? '';
+  const type = image.type ?? getImageType(uri);
+
+  return {
+    uri,
+    name: image.name ?? getImageName(uri, index),
+    type,
+    dataUri: image.dataUri ?? toDataUri(image.base64 ?? image.data, type),
+  };
+};
+
 export const createInspectionItem = ({
   placa,
   kilometraje,
+  tipoServicio,
   observaciones,
   imagenes,
-}: Pick<InspectionItem, 'placa' | 'kilometraje' | 'observaciones' | 'imagenes'>): InspectionItem => ({
+}: Pick<InspectionItem, 'placa' | 'kilometraje' | 'tipoServicio' | 'observaciones' | 'imagenes'>): InspectionItem => ({
   id: Date.now().toString(),
   placa,
   kilometraje,
+  tipoServicio,
   observaciones,
   imagenes,
   createdAt: new Date().toISOString(),
@@ -76,8 +180,11 @@ const parseStoredInspections = (raw: string | null): InspectionItem[] => {
     id: item.id ?? Date.now().toString(),
     placa: item.placa ?? '',
     kilometraje: item.kilometraje ?? '',
+    tipoServicio: item.tipoServicio ?? 'Avaluo',
     observaciones: item.observaciones ?? '',
-    imagenes: item.imagenes ?? [],
+    imagenes: Array.isArray(item.imagenes)
+      ? item.imagenes.map((image, index) => normalizeInspectionImage(image, index))
+      : [],
     createdAt: item.createdAt ?? new Date().toISOString(),
     syncStatus: item.syncStatus ?? 'pending',
     syncAttempts: item.syncAttempts ?? 0,
@@ -101,6 +208,24 @@ export const saveInspectionOffline = async (inspection: InspectionItem) => {
   return inspection;
 };
 
+export const updateInspectionOffline = async (inspection: InspectionItem) => {
+  const current = await getStoredInspections();
+  const updatedInspection: InspectionItem = {
+    ...inspection,
+    syncStatus: 'pending',
+    syncAttempts: 0,
+    syncedAt: null,
+    lastSyncError: null,
+  };
+  const exists = current.some((item) => item.id === inspection.id);
+  const updated = exists
+    ? current.map((item) => (item.id === inspection.id ? updatedInspection : item))
+    : [updatedInspection, ...current];
+
+  await saveInspections(updated);
+  return updatedInspection;
+};
+
 export const getPendingInspections = async () => {
   const inspections = await getStoredInspections();
   return inspections.filter((inspection) => inspection.syncStatus !== 'sent');
@@ -116,46 +241,26 @@ export const buildLaravelInspectionPayload = (inspection: InspectionItem): Inspe
   placa: inspection.placa,
   kilometraje: inspection.kilometraje,
   observaciones: inspection.observaciones,
+  tipo_servicio: inspection.tipoServicio,
+  tiposervicio: inspection.tipoServicio,
   fecha_inspeccion: inspection.createdAt,
   origen: 'app_movil',
-  imagenes: inspection.imagenes,
 });
 
-const getImageName = (uri: string, index: number) => {
-  const name = uri.split('/').pop()?.split('?')[0];
-  return name || `inspeccion-${index + 1}.jpg`;
-};
-
-const getImageType = (uri: string) => {
-  const extension = uri.split('.').pop()?.toLowerCase().split('?')[0];
-
-  if (extension === 'png') {
-    return 'image/png';
-  }
-
-  if (extension === 'webp') {
-    return 'image/webp';
-  }
-
-  return 'image/jpeg';
-};
-
-export const buildLaravelInspectionFormData = (inspection: InspectionItem) => {
+export const buildLaravelInspectionFormData = async (inspection: InspectionItem) => {
   const payload = buildLaravelInspectionPayload(inspection);
   const formData = new FormData();
 
   Object.entries(payload).forEach(([key, value]) => {
-    if (key !== 'imagenes') {
-      formData.append(key, String(value ?? ''));
-    }
+    formData.append(key, String(value ?? ''));
   });
 
-  inspection.imagenes.forEach((uri, index) => {
-    formData.append('imagenes[]', {
-      uri,
-      name: getImageName(uri, index),
-      type: getImageType(uri),
-    } as unknown as Blob);
+  const images = await Promise.all(
+    inspection.imagenes.map((image, index) => resolveImageData(image, index)),
+  );
+
+  images.filter((image): image is string => Boolean(image)).forEach((image) => {
+    formData.append('imagenes[]', image);
   });
 
   return formData;
@@ -184,12 +289,9 @@ const getSyncErrorMessage = (error: unknown) => {
 export const submitInspectionToLaravel = async (inspection: InspectionItem) => {
   const { data } = await axios.post<LaravelSaveResponse>(
     `${API_URL}${INSPECTION_SAVE_PATH}`,
-    buildLaravelInspectionFormData(inspection),
+    await buildLaravelInspectionFormData(inspection),
     {
-      headers: {
-        ...(await getAuthHeaders()),
-        'Content-Type': 'multipart/form-data',
-      },
+      headers: await getAuthHeaders(),
     },
   );
 

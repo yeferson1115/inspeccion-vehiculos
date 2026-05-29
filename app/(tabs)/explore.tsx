@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
@@ -15,7 +15,17 @@ import {
 } from 'react-native';
 
 import { logout } from '@/services/auth';
-import { createInspectionItem, saveInspectionOffline, syncPendingInspections } from '@/services/inspections';
+import {
+  createInspectionItem,
+  getStoredInspections,
+  INSPECTION_SERVICE_TYPES,
+  InspectionImage,
+  InspectionItem,
+  InspectionServiceType,
+  saveInspectionOffline,
+  syncPendingInspections,
+  updateInspectionOffline,
+} from '@/services/inspections';
 
 const normalizePlate = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
 
@@ -24,11 +34,84 @@ const extractPlateFromUri = (uri: string) => {
   return match?.[0] ?? '';
 };
 
+const getImageName = (uri: string, index: number, fileName?: string | null) => {
+  if (fileName) {
+    return fileName;
+  }
+
+  const name = uri.split('/').pop()?.split('?')[0];
+  return name || `inspeccion-${index + 1}.jpg`;
+};
+
+const getImageType = (uri: string, mimeType?: string | null) => {
+  if (mimeType?.startsWith('image/')) {
+    return mimeType;
+  }
+
+  const extension = uri.split('.').pop()?.toLowerCase().split('?')[0];
+
+  if (extension === 'png') {
+    return 'image/png';
+  }
+
+  if (extension === 'webp') {
+    return 'image/webp';
+  }
+
+  return 'image/jpeg';
+};
+
+const toDataUri = (base64: string | null | undefined, type: string) => {
+  if (!base64) {
+    return null;
+  }
+
+  return base64.startsWith('data:') ? base64 : `data:${type};base64,${base64}`;
+};
+
 export default function NewInspectionScreen() {
+  const { inspectionId } = useLocalSearchParams<{ inspectionId?: string }>();
+  const [editingInspection, setEditingInspection] = useState<InspectionItem | null>(null);
   const [placa, setPlaca] = useState('');
   const [kilometraje, setKilometraje] = useState('');
+  const [tipoServicio, setTipoServicio] = useState<InspectionServiceType>('Avaluo');
+  const [isServiceSelectOpen, setIsServiceSelectOpen] = useState(false);
   const [observaciones, setObservaciones] = useState('');
-  const [imagenes, setImagenes] = useState<string[]>([]);
+  const [imagenes, setImagenes] = useState<InspectionImage[]>([]);
+
+  useEffect(() => {
+    const loadInspection = async () => {
+      if (!inspectionId) {
+        setEditingInspection(null);
+        setPlaca('');
+        setKilometraje('');
+        setTipoServicio('Avaluo');
+        setIsServiceSelectOpen(false);
+        setObservaciones('');
+        setImagenes([]);
+        return;
+      }
+
+      const inspections = await getStoredInspections();
+      const inspection = inspections.find((item) => item.id === inspectionId);
+
+      if (!inspection) {
+        Alert.alert('Inspección no encontrada', 'No se encontró la inspección guardada en este dispositivo.');
+        router.replace('/');
+        return;
+      }
+
+      setEditingInspection(inspection);
+      setPlaca(inspection.placa);
+      setKilometraje(inspection.kilometraje);
+      setTipoServicio(inspection.tipoServicio);
+      setIsServiceSelectOpen(false);
+      setObservaciones(inspection.observaciones);
+      setImagenes(inspection.imagenes);
+    };
+
+    void loadInspection();
+  }, [inspectionId]);
 
   const capturarPlaca = async () => {
     const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
@@ -70,10 +153,21 @@ export default function NewInspectionScreen() {
       mediaTypes: ['images'],
       allowsEditing: false,
       quality: 0.7,
+      base64: true,
     });
 
     if (!result.canceled && result.assets[0]?.uri) {
-      setImagenes((prev) => [...prev, result.assets[0].uri]);
+      const asset = result.assets[0];
+      const index = imagenes.length;
+      const type = getImageType(asset.uri, asset.mimeType);
+      const image: InspectionImage = {
+        uri: asset.uri,
+        name: getImageName(asset.uri, index, asset.fileName),
+        type,
+        dataUri: toDataUri(asset.base64, type),
+      };
+
+      setImagenes((prev) => [...prev, image]);
     }
   };
 
@@ -83,23 +177,25 @@ export default function NewInspectionScreen() {
       return;
     }
 
-    const newItem = createInspectionItem({
+    const inspectionData = {
       placa: normalizePlate(placa),
       kilometraje,
+      tipoServicio,
       observaciones,
       imagenes,
-    });
-
-    await saveInspectionOffline(newItem);
+    };
+    const savedItem = editingInspection
+      ? await updateInspectionOffline({ ...editingInspection, ...inspectionData })
+      : await saveInspectionOffline(createInspectionItem(inspectionData));
 
     const syncResult = await syncPendingInspections();
-    const wasSent = syncResult.sent.some((inspection) => inspection.id === newItem.id);
+    const wasSent = syncResult.sent.some((inspection) => inspection.id === savedItem.id);
 
     Alert.alert(
-      'Inspección guardada',
+      editingInspection ? 'Inspección actualizada' : 'Inspección guardada',
       wasSent
-        ? 'Se guardó localmente y también se envió al servicio de Laravel.'
-        : 'Se guardó localmente. Cuando tengas internet podrás enviarla al servicio de Laravel desde la pantalla principal.',
+        ? 'Quedó guardada en el dispositivo y se sincronizó automáticamente con el servicio de Laravel.'
+        : 'Quedó guardada en este dispositivo. Se sincronizará automáticamente cuando tengas internet.',
     );
     router.replace('/');
   };
@@ -115,7 +211,7 @@ export default function NewInspectionScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.topBar}>
           <Text style={styles.topBarTitle}></Text>
           <Pressable style={styles.logoutButton} onPress={cerrarSesion}>
@@ -125,51 +221,91 @@ export default function NewInspectionScreen() {
         </View>
 
         <View style={styles.formContent}>
-          <Text style={styles.title}>Nueva inspección</Text>
+          <Text style={styles.title}>{editingInspection ? 'Editar inspección' : 'Nueva inspección'}</Text>
 
-        <Text style={styles.label}>Placa</Text>
-        <TextInput
-          style={styles.input}
-          value={placa}
-          onChangeText={(text) => setPlaca(normalizePlate(text))}
-          placeholder="Número de placa"
-          autoCapitalize="characters"
-        />
+          <Text style={styles.label}>Placa</Text>
+          <TextInput
+            style={styles.input}
+            value={placa}
+            onChangeText={(text) => setPlaca(normalizePlate(text))}
+            placeholder="Número de placa"
+            autoCapitalize="characters"
+          />
 
-        <Pressable style={styles.secondaryButton} onPress={capturarPlaca}>
-          <Ionicons name="camera-outline" size={20} color="#B91C1C" />
-          <Text style={styles.secondaryButtonText}>Tomar foto para reconocer placa</Text>
-        </Pressable>
+          <Pressable style={styles.secondaryButton} onPress={capturarPlaca}>
+            <Ionicons name="camera-outline" size={20} color="#B91C1C" />
+            <Text style={styles.secondaryButtonText}>Tomar foto para reconocer placa</Text>
+          </Pressable>
 
-        <TextInput
-          style={styles.input}
-          value={kilometraje}
-          onChangeText={setKilometraje}
-          keyboardType="numeric"
-          placeholder="Kilometraje"
-        />
-        <TextInput
-          style={[styles.input, styles.multiline]}
-          value={observaciones}
-          onChangeText={setObservaciones}
-          placeholder="Observaciones"
-          multiline
-        />
+          <TextInput
+            style={styles.input}
+            value={kilometraje}
+            onChangeText={setKilometraje}
+            keyboardType="numeric"
+            placeholder="Kilometraje"
+          />
 
-        <Pressable style={styles.secondaryButton} onPress={agregarImagen}>
-          <Ionicons name="camera-reverse-outline" size={20} color="#B91C1C" />
-          <Text style={styles.secondaryButtonText}>Cargar imagen con cámara ({imagenes.length}/10)</Text>
-        </Pressable>
+          <Text style={styles.label}>Tipo de Servicio</Text>
+          <Pressable
+            style={styles.selectButton}
+            onPress={() => setIsServiceSelectOpen((current) => !current)}>
+            <Text style={styles.selectButtonText}>{tipoServicio}</Text>
+            <Ionicons
+              name={isServiceSelectOpen ? 'chevron-up-outline' : 'chevron-down-outline'}
+              size={20}
+              color="#B91C1C"
+            />
+          </Pressable>
+          {isServiceSelectOpen ? (
+            <View style={styles.selectOptions}>
+              {INSPECTION_SERVICE_TYPES.map((serviceType) => (
+                <Pressable
+                  key={serviceType}
+                  style={[
+                    styles.selectOption,
+                    tipoServicio === serviceType ? styles.selectedOption : null,
+                  ]}
+                  onPress={() => {
+                    setTipoServicio(serviceType);
+                    setIsServiceSelectOpen(false);
+                  }}>
+                  <Text
+                    style={[
+                      styles.selectOptionText,
+                      tipoServicio === serviceType ? styles.selectedOptionText : null,
+                    ]}>
+                    {serviceType}
+                  </Text>
+                  {tipoServicio === serviceType ? (
+                    <Ionicons name="checkmark-circle" size={18} color="#B91C1C" />
+                  ) : null}
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
 
-        <View style={styles.grid}>
-          {imagenes.map((uri) => (
-            <Image key={uri} source={{ uri }} style={styles.preview} />
-          ))}
-        </View>
+          <TextInput
+            style={[styles.input, styles.multiline]}
+            value={observaciones}
+            onChangeText={setObservaciones}
+            placeholder="Observaciones"
+            multiline
+          />
 
-        <Pressable style={styles.primaryButton} onPress={guardar}>
-          <Text style={styles.primaryButtonText}>Guardar</Text>
-        </Pressable>
+          <Pressable style={styles.secondaryButton} onPress={agregarImagen}>
+            <Ionicons name="camera-reverse-outline" size={20} color="#B91C1C" />
+            <Text style={styles.secondaryButtonText}>Cargar imagen con cámara ({imagenes.length}/10)</Text>
+          </Pressable>
+
+          <View style={styles.grid}>
+            {imagenes.map((image) => (
+              <Image key={`${image.uri}-${image.name}`} source={{ uri: image.uri }} style={styles.preview} />
+            ))}
+          </View>
+
+          <Pressable style={styles.primaryButton} onPress={guardar}>
+            <Text style={styles.primaryButtonText}>{editingInspection ? 'Actualizar' : 'Guardar'}</Text>
+          </Pressable>
 
           <Pressable style={styles.cancelButton} onPress={cancelar}>
             <Text style={styles.cancelButtonText}>Cancelar</Text>
@@ -182,7 +318,8 @@ export default function NewInspectionScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F5F5F5' },
-  container: { paddingBottom: 32 },
+  scroll: { flex: 1 },
+  container: { flexGrow: 1, paddingBottom: 32 },
   topBar: {
     backgroundColor: '#DC2626',
     paddingHorizontal: 14,
@@ -209,6 +346,41 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   multiline: { minHeight: 100, textAlignVertical: 'top' },
+  selectButton: {
+    minHeight: 50,
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectButtonText: { color: '#3F3F46', fontWeight: '600' },
+  selectOptions: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    marginTop: -4,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  selectOption: {
+    minHeight: 46,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FEE2E2',
+  },
+  selectedOption: { backgroundColor: '#FFF1F2' },
+  selectOptionText: { color: '#3F3F46', fontWeight: '500' },
+  selectedOptionText: { color: '#B91C1C', fontWeight: '700' },
   secondaryButton: {
     flexDirection: 'row',
     gap: 10,
