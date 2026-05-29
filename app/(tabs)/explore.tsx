@@ -197,23 +197,9 @@ export default function NewInspectionScreen() {
     setImagenes([]);
   };
 
-  const getSavedMessage = (inspection: InspectionItem) => (
-    inspection.syncStatus === 'sent'
-      ? 'El ingreso móvil se creó correctamente.'
-      : `La inspección quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${inspection.lastSyncError ? ` Detalle: ${inspection.lastSyncError}` : ''} Se intentará nuevamente cuando tengas internet.`
+  const getSyncFailureMessage = (inspection: InspectionItem) => (
+    `La inspección quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${inspection.lastSyncError ? ` Detalle: ${inspection.lastSyncError}` : ''} Intenta nuevamente cuando tengas internet.`
   );
-
-  const sincronizarCreacion = (savedItem: InspectionItem) => {
-    void syncInspection(savedItem)
-      .then((syncedItem) => {
-        setCreationAlertMessage(`${getSavedMessage(syncedItem)} ¿Deseas crear uno nuevo?`);
-      })
-      .catch(() => {
-        setCreationAlertMessage(
-          'El ingreso quedó guardado en este dispositivo. Se intentará sincronizar nuevamente cuando tengas internet. ¿Deseas crear uno nuevo?',
-        );
-      });
-  };
 
   const guardar = async () => {
     if (isSaving) {
@@ -241,16 +227,20 @@ export default function NewInspectionScreen() {
         ? await updateInspectionOffline({ ...editingInspection, ...inspectionData })
         : await saveInspectionOffline(createInspectionItem(inspectionData));
 
-      if (!isEditing) {
-        setCreationAlertMessage('Estamos guardando el ingreso móvil. ¿Deseas crear uno nuevo?');
-        setIsCreationAlertVisible(true);
-        sincronizarCreacion(savedItem);
+      const syncedItem = await syncInspection(savedItem);
+
+      if (syncedItem.syncStatus !== 'sent') {
+        Alert.alert('No se pudo sincronizar', getSyncFailureMessage(syncedItem));
         return;
       }
 
-      const syncedItem = await syncInspection(savedItem);
+      if (!isEditing) {
+        setCreationAlertMessage('Ingreso móvil creado correctamente. ¿Deseas crear uno nuevo?');
+        setIsCreationAlertVisible(true);
+        return;
+      }
 
-      Alert.alert('Inspección actualizada', getSavedMessage(syncedItem), [
+      Alert.alert('Inspección actualizada', 'La inspección se actualizó correctamente.', [
         { text: 'Aceptar', onPress: () => router.replace('/') },
       ]);
     } catch {
