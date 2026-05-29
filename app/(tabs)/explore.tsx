@@ -1,7 +1,7 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   Alert,
@@ -124,7 +124,7 @@ export default function NewInspectionScreen() {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.topBar}>
-          <Text style={styles.topBarTitle}>inspeccor</Text>
+          <Text style={styles.topBarTitle}></Text>
           <Pressable style={styles.logoutButton} onPress={cerrarSesion}>
             <Ionicons name="log-out-outline" size={22} color="#FFF" />
             <Text style={styles.logoutText}>Cerrar sesión</Text>

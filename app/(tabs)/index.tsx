@@ -1,6 +1,6 @@
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Image,
@@ -98,7 +98,7 @@ export default function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {isLoggedIn ? (
           <View style={styles.topBar}>
-            <Text style={styles.topBarTitle}>inspeccor</Text>
+            <Text style={styles.topBarTitle}></Text>
             <Pressable
               style={styles.logoutButton}
               onPress={async () => {
