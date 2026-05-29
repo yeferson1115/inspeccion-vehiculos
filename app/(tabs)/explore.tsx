@@ -24,7 +24,7 @@ import {
   InspectionItem,
   InspectionServiceType,
   saveInspectionOffline,
-  syncPendingInspections,
+  syncInspection,
   updateInspectionOffline,
 } from '@/services/inspections';
 
@@ -183,12 +183,45 @@ export default function NewInspectionScreen() {
     }
   };
 
+  const resetForm = () => {
+    setEditingInspection(null);
+    setPlaca('');
+    setKilometraje('');
+    setTipoServicio('Avaluo');
+    setIsServiceSelectOpen(false);
+    setObservaciones('');
+    setImagenes([]);
+  };
+
+  const getSyncFailureMessage = (inspection: InspectionItem) => (
+    `La inspección quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${inspection.lastSyncError ? ` Detalle: ${inspection.lastSyncError}` : ''} Intenta nuevamente cuando tengas internet.`
+  );
+
+  const preguntarCrearOtro = () => {
+    Alert.alert(
+      'Ingreso móvil creado',
+      'Ingreso móvil creado correctamente. ¿Deseas crear uno nuevo?',
+      [
+        {
+          text: 'No',
+          style: 'cancel',
+          onPress: () => router.replace('/'),
+        },
+        {
+          text: 'Sí',
+          onPress: resetForm,
+        },
+      ],
+    );
+  };
+
   const guardar = async () => {
     if (!placa.trim()) {
       Alert.alert('Campo requerido', 'Debes ingresar o capturar una placa.');
       return;
     }
 
+    const isEditing = Boolean(editingInspection);
     const inspectionData = {
       placa: normalizePlate(placa),
       kilometraje,
@@ -202,17 +235,21 @@ export default function NewInspectionScreen() {
         ? await updateInspectionOffline({ ...editingInspection, ...inspectionData })
         : await saveInspectionOffline(createInspectionItem(inspectionData));
 
-      const syncResult = await syncPendingInspections();
-      const wasSent = syncResult.sent.some((inspection) => inspection.id === savedItem.id);
-      const failedSync = syncResult.failed.find((inspection) => inspection.id === savedItem.id);
+      const syncedItem = await syncInspection(savedItem);
 
-      Alert.alert(
-        editingInspection ? 'Inspección actualizada' : 'Inspección guardada',
-        wasSent
-          ? 'Quedó guardada y se sincronizó automáticamente con el servicio de Laravel.'
-          : `Quedó guardada en este dispositivo, pero no se pudo sincronizar ahora.${failedSync?.lastSyncError ? ` Detalle: ${failedSync.lastSyncError}` : ''} Se intentará nuevamente cuando tengas internet.`,
-        [{ text: 'Aceptar', onPress: () => router.replace('/') }],
-      );
+      if (syncedItem.syncStatus !== 'sent') {
+        Alert.alert('No se pudo sincronizar', getSyncFailureMessage(syncedItem));
+        return;
+      }
+
+      if (!isEditing) {
+        preguntarCrearOtro();
+        return;
+      }
+
+      Alert.alert('Inspección actualizada', 'La inspección se actualizó correctamente.', [
+        { text: 'Aceptar', onPress: () => router.replace('/') },
+      ]);
     } catch {
       Alert.alert(
         'No se pudo guardar',
