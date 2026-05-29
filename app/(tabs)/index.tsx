@@ -14,7 +14,7 @@ import {
   View
 } from 'react-native';
 
-import { getLoginErrorMessage, getSession, login, logout } from '@/services/auth';
+import { getLoginErrorMessage, getSession, login, logout, subscribeToSessionExpired } from '@/services/auth';
 import { AvaluoMovil, getAvaluosMovil } from '@/services/avaluos';
 import {
   getPendingInspectionsCount,
@@ -38,6 +38,14 @@ export default function LoginScreen() {
   const [pendingInspections, setPendingInspections] = useState(0);
   const [isSyncingInspections, setIsSyncingInspections] = useState(false);
 
+
+  const clearAuthenticatedState = useCallback(() => {
+    setIsLoggedIn(false);
+    setAvaluos([]);
+    setAvaluosTotal(0);
+    setPendingInspections(0);
+    setLocalInspections([]);
+  }, []);
 
   const loadLocalInspections = useCallback(async () => {
     const inspections = await getStoredInspections();
@@ -65,6 +73,16 @@ export default function LoginScreen() {
       setIsLoadingAvaluos(false);
     }
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToSessionExpired(() => {
+      clearAuthenticatedState();
+      setError('Tu sesión expiró. Inicia sesión nuevamente.');
+      Alert.alert('Sesión expirada', 'Tu sesión expiró. Inicia sesión nuevamente.');
+    });
+
+    return unsubscribe;
+  }, [clearAuthenticatedState]);
 
   useEffect(() => {
     const loadSession = async () => {
@@ -210,11 +228,7 @@ export default function LoginScreen() {
               style={styles.logoutButton}
               onPress={async () => {
                 await logout();
-                setIsLoggedIn(false);
-                setAvaluos([]);
-                setAvaluosTotal(0);
-                setPendingInspections(0);
-                setLocalInspections([]);
+                clearAuthenticatedState();
               }}>
               <Ionicons name="log-out-outline" size={22} color="#FFF" />
               <Text style={styles.logoutText}>Cerrar sesión</Text>

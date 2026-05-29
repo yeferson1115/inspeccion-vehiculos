@@ -6,6 +6,7 @@ export const SESSION_KEY = 'auth_session';
 const DEFAULT_API_URL = 'http://localhost:81/api';
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? DEFAULT_API_URL;
 const LOGIN_PATH = process.env.EXPO_PUBLIC_LOGIN_PATH ?? '/login';
+let isHandlingExpiredSession = false;
 
 interface ApiLoginResponse {
   access_token?: string;
@@ -54,6 +55,7 @@ export const login = async (identifier: string, password: string) => {
   };
 
   await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  isHandlingExpiredSession = false;
 
   return session;
 };
@@ -73,7 +75,29 @@ export const getAuthHeaders = async () => {
     : undefined;
 };
 
-export const logout = () => AsyncStorage.removeItem(SESSION_KEY);
+type SessionExpiredListener = () => void;
+
+const sessionExpiredListeners = new Set<SessionExpiredListener>();
+
+const notifySessionExpired = () => {
+  sessionExpiredListeners.forEach((listener) => listener());
+};
+
+export const subscribeToSessionExpired = (listener: SessionExpiredListener) => {
+  sessionExpiredListeners.add(listener);
+
+  return () => {
+    sessionExpiredListeners.delete(listener);
+  };
+};
+
+export const logout = async ({ notify = false }: { notify?: boolean } = {}) => {
+  await AsyncStorage.removeItem(SESSION_KEY);
+
+  if (notify) {
+    notifySessionExpired();
+  }
+};
 
 const getMessageFromResponse = (responseData: unknown) => {
   if (!responseData || typeof responseData !== 'object') {
@@ -103,3 +127,21 @@ export const getLoginErrorMessage = (error: unknown) => {
 
   return 'No fue posible iniciar sesión. Intenta nuevamente.';
 };
+
+export const isUnauthenticatedError = (error: unknown) =>
+  axios.isAxiosError(error) && getMessageFromResponse(error.response?.data) === 'Unauthenticated.';
+
+axios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const requestUrl = axios.isAxiosError(error) ? error.config?.url : undefined;
+    const isLoginRequest = typeof requestUrl === 'string' && requestUrl.endsWith(LOGIN_PATH);
+
+    if (!isLoginRequest && !isHandlingExpiredSession && isUnauthenticatedError(error)) {
+      isHandlingExpiredSession = true;
+      await logout({ notify: true });
+    }
+
+    return Promise.reject(error);
+  },
+);
