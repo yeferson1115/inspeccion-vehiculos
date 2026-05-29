@@ -114,6 +114,7 @@ export default function NewInspectionScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [savedPromptVisible, setSavedPromptVisible] = useState(false);
   const [savedPromptMessage, setSavedPromptMessage] = useState('Ingreso móvil guardado correctamente. ¿Deseas crear uno nuevo?');
+  const [saveStatusMessage, setSaveStatusMessage] = useState('');
 
   useEffect(() => {
     const loadInspection = async () => {
@@ -127,6 +128,7 @@ export default function NewInspectionScreen() {
         setImagenes([]);
         setSavedPromptVisible(false);
         setSavedPromptMessage('Ingreso móvil guardado correctamente. ¿Deseas crear uno nuevo?');
+        setSaveStatusMessage('');
         return;
       }
 
@@ -198,6 +200,7 @@ export default function NewInspectionScreen() {
     setImagenes([]);
     setSavedPromptVisible(false);
     setSavedPromptMessage('Ingreso móvil guardado correctamente. ¿Deseas crear uno nuevo?');
+    setSaveStatusMessage('');
   };
 
   const getSyncFailureMessage = (inspection: InspectionItem) => (
@@ -221,11 +224,14 @@ export default function NewInspectionScreen() {
 
   const guardar = async () => {
     if (isSaving) {
+      setSaveStatusMessage('Ya se está guardando la inspección. Espera un momento.');
       return;
     }
 
     if (!placa.trim()) {
-      Alert.alert('Campo requerido', 'Debes ingresar o capturar una placa.');
+      const requiredMessage = 'Debes ingresar o capturar una placa.';
+      setSaveStatusMessage(requiredMessage);
+      Alert.alert('Campo requerido', requiredMessage);
       return;
     }
 
@@ -239,35 +245,40 @@ export default function NewInspectionScreen() {
     };
 
     setSavedPromptVisible(false);
+    setSaveStatusMessage('Guardando inspección en este dispositivo...');
     setIsSaving(true);
 
     try {
       const savedItem = editingInspection
         ? await updateInspectionOffline({ ...editingInspection, ...inspectionData })
         : await saveInspectionOffline(createInspectionItem(inspectionData));
+
+      setSaveStatusMessage('Guardado local. Enviando al API...');
+
       const syncedItem = await syncInspection(savedItem);
       const wasSynced = syncedItem.syncStatus === 'sent';
+      const resultMessage = wasSynced
+        ? 'Ingreso móvil guardado y enviado correctamente al API.'
+        : getSyncFailureMessage(syncedItem);
+
+      setSaveStatusMessage(resultMessage);
 
       if (!isEditing) {
-        showCreateAnotherPrompt(
-          wasSynced
-            ? 'Ingreso móvil guardado y enviado correctamente al API. ¿Deseas crear uno nuevo?'
-            : `${getSyncFailureMessage(syncedItem)} ¿Deseas crear uno nuevo?`,
-        );
+        showCreateAnotherPrompt(`${resultMessage} ¿Deseas crear uno nuevo?`);
         return;
       }
 
       Alert.alert(
         wasSynced ? 'Inspección actualizada' : 'Inspección guardada localmente',
-        wasSynced
-          ? 'La inspección se guardó correctamente en el API.'
-          : getSyncFailureMessage(syncedItem),
+        resultMessage,
         [{ text: 'Aceptar', onPress: () => router.replace('/') }],
       );
     } catch {
+      const errorMessage = 'Ocurrió un error al guardar la inspección. Intenta nuevamente.';
+      setSaveStatusMessage(errorMessage);
       Alert.alert(
         'No se pudo guardar',
-        'Ocurrió un error al guardar la inspección. Intenta nuevamente.',
+        errorMessage,
       );
     } finally {
       setIsSaving(false);
@@ -380,12 +391,14 @@ export default function NewInspectionScreen() {
 
           <Pressable
             style={[styles.primaryButton, isSaving ? styles.disabledButton : null]}
-            onPress={guardar}
-            disabled={isSaving}>
+            onPress={() => { void guardar(); }}
+            disabled={false}>
             <Text style={styles.primaryButtonText}>
               {isSaving ? 'Guardando...' : editingInspection ? 'Actualizar' : 'Guardar'}
             </Text>
           </Pressable>
+
+          {saveStatusMessage ? <Text style={styles.saveStatusText}>{saveStatusMessage}</Text> : null}
 
           <Pressable style={styles.cancelButton} onPress={cancelar}>
             <Text style={styles.cancelButtonText}>Cancelar</Text>
@@ -499,6 +512,7 @@ const styles = StyleSheet.create({
   },
   disabledButton: { opacity: 0.65 },
   primaryButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  saveStatusText: { color: '#3F3F46', fontSize: 14, fontWeight: '600', marginTop: 10, marginBottom: 2 },
   cancelButton: {
     marginTop: 10,
     borderWidth: 1,
