@@ -9,10 +9,20 @@ const INSPECTION_SAVE_PATH = process.env.EXPO_PUBLIC_INSPECTION_SAVE_PATH ?? '/i
 
 export type InspectionSyncStatus = 'pending' | 'sent' | 'failed';
 
+export type InspectionServiceType = 'Avaluo' | 'Inspección' | 'Avaluo e Inspección' | 'Sec Bogota';
+
+export const INSPECTION_SERVICE_TYPES: InspectionServiceType[] = [
+  'Avaluo',
+  'Inspección',
+  'Avaluo e Inspección',
+  'Sec Bogota',
+];
+
 export interface InspectionItem {
   id: string;
   placa: string;
   kilometraje: string;
+  tipoServicio: InspectionServiceType;
   observaciones: string;
   imagenes: string[];
   createdAt: string;
@@ -28,6 +38,8 @@ export interface InspectionPayload {
   placa: string;
   kilometraje: string;
   observaciones: string;
+  tipo_servicio: InspectionServiceType;
+  tiposervicio: InspectionServiceType;
   fecha_inspeccion: string;
   origen: 'app_movil';
   imagenes: string[];
@@ -49,12 +61,14 @@ interface LaravelSaveResponse {
 export const createInspectionItem = ({
   placa,
   kilometraje,
+  tipoServicio,
   observaciones,
   imagenes,
-}: Pick<InspectionItem, 'placa' | 'kilometraje' | 'observaciones' | 'imagenes'>): InspectionItem => ({
+}: Pick<InspectionItem, 'placa' | 'kilometraje' | 'tipoServicio' | 'observaciones' | 'imagenes'>): InspectionItem => ({
   id: Date.now().toString(),
   placa,
   kilometraje,
+  tipoServicio,
   observaciones,
   imagenes,
   createdAt: new Date().toISOString(),
@@ -76,6 +90,7 @@ const parseStoredInspections = (raw: string | null): InspectionItem[] => {
     id: item.id ?? Date.now().toString(),
     placa: item.placa ?? '',
     kilometraje: item.kilometraje ?? '',
+    tipoServicio: item.tipoServicio ?? 'Avaluo',
     observaciones: item.observaciones ?? '',
     imagenes: item.imagenes ?? [],
     createdAt: item.createdAt ?? new Date().toISOString(),
@@ -101,6 +116,24 @@ export const saveInspectionOffline = async (inspection: InspectionItem) => {
   return inspection;
 };
 
+export const updateInspectionOffline = async (inspection: InspectionItem) => {
+  const current = await getStoredInspections();
+  const updatedInspection: InspectionItem = {
+    ...inspection,
+    syncStatus: 'pending',
+    syncAttempts: 0,
+    syncedAt: null,
+    lastSyncError: null,
+  };
+  const exists = current.some((item) => item.id === inspection.id);
+  const updated = exists
+    ? current.map((item) => (item.id === inspection.id ? updatedInspection : item))
+    : [updatedInspection, ...current];
+
+  await saveInspections(updated);
+  return updatedInspection;
+};
+
 export const getPendingInspections = async () => {
   const inspections = await getStoredInspections();
   return inspections.filter((inspection) => inspection.syncStatus !== 'sent');
@@ -116,6 +149,8 @@ export const buildLaravelInspectionPayload = (inspection: InspectionItem): Inspe
   placa: inspection.placa,
   kilometraje: inspection.kilometraje,
   observaciones: inspection.observaciones,
+  tipo_servicio: inspection.tipoServicio,
+  tiposervicio: inspection.tipoServicio,
   fecha_inspeccion: inspection.createdAt,
   origen: 'app_movil',
   imagenes: inspection.imagenes,
