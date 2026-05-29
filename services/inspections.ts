@@ -101,6 +101,24 @@ export const saveInspectionOffline = async (inspection: InspectionItem) => {
   return inspection;
 };
 
+export const updateInspectionOffline = async (inspection: InspectionItem) => {
+  const current = await getStoredInspections();
+  const updatedInspection: InspectionItem = {
+    ...inspection,
+    syncStatus: 'pending',
+    syncAttempts: 0,
+    syncedAt: null,
+    lastSyncError: null,
+  };
+  const exists = current.some((item) => item.id === inspection.id);
+  const updated = exists
+    ? current.map((item) => (item.id === inspection.id ? updatedInspection : item))
+    : [updatedInspection, ...current];
+
+  await saveInspections(updated);
+  return updatedInspection;
+};
+
 export const getPendingInspections = async () => {
   const inspections = await getStoredInspections();
   return inspections.filter((inspection) => inspection.syncStatus !== 'sent');
