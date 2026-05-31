@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 
 import { API_URL, getAuthHeaders } from '@/services/auth';
 
@@ -103,8 +104,18 @@ const isDownloadableImageUrl = (uri: string) => /^https?:\/\//i.test(uri);
 
 const isReadableLocalImageUri = (uri: string) => /^(file|content|asset):\/\//i.test(uri);
 
-const resolveImageData = async (image: InspectionImage, index: number) => {
+type FormDataImagePart = string | { uri: string; name: string; type: string };
+
+const resolveImageData = async (image: InspectionImage, index: number): Promise<FormDataImagePart | null> => {
   const normalizedImage = normalizeInspectionImage(image, index);
+
+  if (Platform.OS !== 'web' && normalizedImage.uri && isReadableLocalImageUri(normalizedImage.uri)) {
+    return {
+      uri: normalizedImage.uri,
+      name: normalizedImage.name,
+      type: normalizedImage.type,
+    };
+  }
 
   if (normalizedImage.dataUri) {
     return normalizedImage.dataUri;
@@ -266,8 +277,8 @@ export const buildLaravelInspectionFormData = async (inspection: InspectionItem)
     inspection.imagenes.map((image, index) => resolveImageData(image, index)),
   );
 
-  images.filter((image): image is string => Boolean(image)).forEach((image) => {
-    formData.append('imagenes[]', image);
+  images.filter((image): image is FormDataImagePart => Boolean(image)).forEach((image) => {
+    formData.append('imagenes[]', image as unknown as Blob);
   });
 
   return formData;
@@ -281,6 +292,22 @@ const getSyncErrorMessage = (error: unknown) => {
 
     if (typeof message === 'string') {
       return message;
+    }
+
+    const errors = error.response?.data && typeof error.response.data === 'object'
+      ? (error.response.data as Record<string, unknown>).errors
+      : null;
+
+    if (errors && typeof errors === 'object') {
+      const [firstError] = Object.values(errors as Record<string, unknown>);
+
+      if (Array.isArray(firstError) && typeof firstError[0] === 'string') {
+        return firstError[0];
+      }
+
+      if (typeof firstError === 'string') {
+        return firstError;
+      }
     }
 
     if (!error.response) {
