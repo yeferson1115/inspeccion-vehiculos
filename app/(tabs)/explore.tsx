@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -66,6 +67,26 @@ const toDataUri = (base64: string | null | undefined, type: string) => {
   }
 
   return base64.startsWith('data:') ? base64 : `data:${type};base64,${base64}`;
+};
+
+const getMaxImagesByService = (serviceType: InspectionServiceType) => (serviceType === 'Sec Bogota' ? 10 : 30);
+
+const persistLocalImage = async (uri: string, name: string) => {
+  if (Platform.OS === 'web' || !FileSystem.documentDirectory || !uri.startsWith('file://')) {
+    return uri;
+  }
+
+  const directory = `${FileSystem.documentDirectory}inspection-images/`;
+  const safeName = name.replace(/[^a-zA-Z0-9._-]/g, '-');
+  const destination = `${directory}${Date.now()}-${safeName}`;
+
+  try {
+    await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+    await FileSystem.copyAsync({ from: uri, to: destination });
+    return destination;
+  } catch {
+    return uri;
+  }
 };
 
 const pickImage = async ({ base64 = false }: { base64?: boolean } = {}) => {
@@ -165,9 +186,23 @@ export default function NewInspectionScreen() {
     }
   };
 
+  const maxImages = getMaxImagesByService(tipoServicio);
+
+  useEffect(() => {
+    const serviceMaxImages = getMaxImagesByService(tipoServicio);
+
+    if (imagenes.length > serviceMaxImages) {
+      setImagenes((current) => current.slice(0, serviceMaxImages));
+      Alert.alert(
+        'Límite de imágenes ajustado',
+        `Para ${tipoServicio} solo se permiten ${serviceMaxImages} imágenes. Se conservaron las primeras ${serviceMaxImages}.`,
+      );
+    }
+  }, [imagenes.length, tipoServicio]);
+
   const agregarImagen = async () => {
-    if (imagenes.length >= 10) {
-      Alert.alert('Límite alcanzado', 'Solo se permiten 10 imágenes por inspección.');
+    if (imagenes.length >= maxImages) {
+      Alert.alert('Límite alcanzado', `Solo se permiten ${maxImages} imágenes para ${tipoServicio}.`);
       return;
     }
 
@@ -177,9 +212,11 @@ export default function NewInspectionScreen() {
       const asset = result.assets[0];
       const index = imagenes.length;
       const type = getImageType(asset.uri, asset.mimeType);
+      const name = getImageName(asset.uri, index, asset.fileName);
+      const persistentUri = await persistLocalImage(asset.uri, name);
       const image: InspectionImage = {
-        uri: asset.uri,
-        name: getImageName(asset.uri, index, asset.fileName),
+        uri: persistentUri,
+        name,
         type,
         dataUri: toDataUri(asset.base64, type),
       };
@@ -347,6 +384,16 @@ export default function NewInspectionScreen() {
                     tipoServicio === serviceType ? styles.selectedOption : null,
                   ]}
                   onPress={() => {
+                    const serviceMaxImages = getMaxImagesByService(serviceType);
+
+                    if (imagenes.length > serviceMaxImages) {
+                      Alert.alert(
+                        'Límite de imágenes',
+                        `Para ${serviceType} solo se permiten ${serviceMaxImages} imágenes. Se conservarán las primeras ${serviceMaxImages}.`,
+                      );
+                      setImagenes((current) => current.slice(0, serviceMaxImages));
+                    }
+
                     setTipoServicio(serviceType);
                     setIsServiceSelectOpen(false);
                   }}>
@@ -375,7 +422,7 @@ export default function NewInspectionScreen() {
 
           <Pressable style={styles.secondaryButton} onPress={agregarImagen}>
             <Ionicons name="camera-reverse-outline" size={20} color="#B91C1C" />
-            <Text style={styles.secondaryButtonText}>Cargar imagen con cámara ({imagenes.length}/10)</Text>
+            <Text style={styles.secondaryButtonText}>Cargar imagen con cámara ({imagenes.length}/{maxImages})</Text>
           </Pressable>
 
           <View style={styles.grid}>
