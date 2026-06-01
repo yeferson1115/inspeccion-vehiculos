@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
+  Modal,
   Platform,
   Pressable,
   SafeAreaView,
@@ -447,22 +448,33 @@ export default function NewInspectionScreen() {
             <Text style={styles.cancelButtonText}>Cancelar</Text>
           </Pressable>
 
-          {savedPromptVisible ? (
-            <View style={styles.savedPrompt}>
-              <Text style={styles.savedPromptTitle}>Ingreso móvil guardado</Text>
-              <Text style={styles.savedPromptMessage}>{savedPromptMessage}</Text>
-              <View style={styles.savedPromptActions}>
-                <Pressable style={[styles.savedPromptButton, styles.savedPromptSecondaryButton]} onPress={handleGoToInspectionList}>
-                  <Text style={styles.savedPromptSecondaryText}>No</Text>
-                </Pressable>
-                <Pressable style={[styles.savedPromptButton, styles.savedPromptPrimaryButton]} onPress={handleCreateAnotherInspection}>
-                  <Text style={styles.savedPromptPrimaryText}>Sí</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : null}
         </View>
       </ScrollView>
+
+      <Modal
+        transparent
+        animationType="fade"
+        visible={savedPromptVisible}
+        onRequestClose={handleGoToInspectionList}>
+        <View style={styles.alertOverlay}>
+          <View style={styles.alertCard}>
+            <Text style={styles.alertTitle}>Ingreso móvil guardado</Text>
+            <Text style={styles.alertMessage}>{savedPromptMessage}</Text>
+            <View style={styles.alertActions}>
+              <Pressable
+                style={[styles.alertButton, styles.alertSecondaryButton]}
+                onPress={handleGoToInspectionList}>
+                <Text style={styles.alertSecondaryText}>No</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.alertButton, styles.alertPrimaryButton]}
+                onPress={handleCreateAnotherInspection}>
+                <Text style={styles.alertPrimaryText}>Sí</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -567,29 +579,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
   },
   cancelButtonText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
-  savedPrompt: {
-    marginTop: 16,
-    backgroundColor: '#FFF',
-    borderColor: '#FCA5A5',
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 18,
-  },
-  savedPromptTitle: { color: '#B91C1C', fontSize: 20, fontWeight: '800', marginBottom: 8 },
-  savedPromptMessage: { color: '#3F3F46', fontSize: 16, lineHeight: 22, marginBottom: 18 },
-  savedPromptActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
-  savedPromptButton: {
-    minWidth: 96,
-    minHeight: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 18,
-  },
-  savedPromptSecondaryButton: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#FCA5A5' },
-  savedPromptPrimaryButton: { backgroundColor: '#E11D2E' },
-  savedPromptSecondaryText: { color: '#B91C1C', fontSize: 16, fontWeight: '700' },
-  savedPromptPrimaryText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
   alertOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
