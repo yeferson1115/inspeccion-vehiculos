@@ -8,7 +8,7 @@ import { API_URL, getAuthHeaders } from '@/services/auth';
 export const INSPECTIONS_STORAGE_KEY = 'inspections';
 
 const INSPECTION_SAVE_PATH = process.env.EXPO_PUBLIC_INSPECTION_SAVE_PATH ?? '/ingreso/movil/guardar';
-const INSPECTION_SYNC_TIMEOUT_MS = 15000;
+const INSPECTION_SYNC_TIMEOUT_MS = 60000;
 
 export type InspectionSyncStatus = 'pending' | 'sent' | 'failed';
 
@@ -212,8 +212,21 @@ const parseStoredInspections = (raw: string | null): InspectionItem[] => {
   }));
 };
 
+const removeEmbeddedImageData = (image: InspectionImage): InspectionImage => ({
+  ...image,
+  dataUri: null,
+});
+
+const prepareInspectionForStorage = (inspection: InspectionItem): InspectionItem => ({
+  ...inspection,
+  imagenes: inspection.imagenes.map(removeEmbeddedImageData),
+});
+
 const saveInspections = (inspections: InspectionItem[]) =>
-  AsyncStorage.setItem(INSPECTIONS_STORAGE_KEY, JSON.stringify(inspections));
+  AsyncStorage.setItem(
+    INSPECTIONS_STORAGE_KEY,
+    JSON.stringify(inspections.map(prepareInspectionForStorage)),
+  );
 
 export const getStoredInspections = async () => {
   const current = await AsyncStorage.getItem(INSPECTIONS_STORAGE_KEY);

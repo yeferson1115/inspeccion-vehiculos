@@ -90,6 +90,7 @@ const persistLocalImage = async (uri: string, name: string) => {
 };
 
 const pickImage = async ({ base64 = false }: { base64?: boolean } = {}) => {
+  const includeBase64 = Platform.OS === 'web' && base64;
   if (Platform.OS === 'ios' || Platform.OS === 'android') {
     const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
 
@@ -101,8 +102,8 @@ const pickImage = async ({ base64 = false }: { base64?: boolean } = {}) => {
     return ImagePicker.launchCameraAsync({
       mediaTypes: ['images'],
       allowsEditing: false,
-      quality: base64 ? 0.7 : 0.8,
-      base64,
+      quality: includeBase64 ? 0.7 : 0.75,
+      base64: includeBase64,
     });
   }
 
@@ -116,8 +117,8 @@ const pickImage = async ({ base64 = false }: { base64?: boolean } = {}) => {
   return ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
     allowsEditing: false,
-    quality: base64 ? 0.7 : 0.8,
-    base64,
+    quality: includeBase64 ? 0.7 : 0.75,
+    base64: includeBase64,
   });
 };
 
