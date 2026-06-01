@@ -122,7 +122,7 @@ const getMessageFromResponse = (responseData: unknown) => {
 
 export const getLoginErrorMessage = (error: unknown) => {
   if (axios.isAxiosError(error)) {
-    return getMessageFromResponse(error.response?.data) ?? 'No fue posible iniciar sesión con el API.';
+    return getMessageFromResponse(error.response?.data) ?? 'No fue posible iniciar sesión';
   }
 
   return 'No fue posible iniciar sesión. Intenta nuevamente.';

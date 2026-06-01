@@ -266,7 +266,7 @@ export default function LoginScreen() {
                   secureTextEntry
                 />
                 {error ? <Text style={styles.errorText}>{error}</Text> : null}
-                <Text style={styles.helperText}>Ingresa con el usuario registrado en el API de El Evaluador.</Text>
+                <Text style={styles.helperText}>Ingresa con el usuario registrado en El Evaluador.</Text>
                 <Pressable
                   style={[styles.primaryButton, isLoading ? styles.disabledButton : null]}
                   onPress={handleLogin}

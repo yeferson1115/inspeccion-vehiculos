@@ -292,7 +292,7 @@ export default function NewInspectionScreen() {
       const syncedItem = await saveInspectionWithImmediateSync(inspection);
       const wasSynced = syncedItem.syncStatus === 'sent';
       const resultMessage = wasSynced
-        ? 'Ingreso móvil guardado y enviado correctamente al API.'
+        ? 'Ingreso móvil guardado y enviado correctamente.'
         : getSyncFailureMessage(syncedItem);
 
       setSaveStatusMessage(resultMessage);
