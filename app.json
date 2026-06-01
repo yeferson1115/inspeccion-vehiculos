@@ -20,7 +20,10 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.ysossa.inspeccionvehiculos"
+      "package": "com.ysossa.inspeccionvehiculos",
+      "permissions": [
+        "INTERNET"
+      ]
     },
     "web": {
       "output": "static",

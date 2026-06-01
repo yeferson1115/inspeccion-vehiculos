@@ -73,6 +73,44 @@ interface LaravelSaveResponse {
   };
 }
 
+interface ApiResponseError extends Error {
+  response: {
+    status: number;
+    data: unknown;
+  };
+}
+
+const createApiResponseError = (status: number, data: unknown): ApiResponseError => {
+  const error = new Error(`Error ${status} al guardar en Laravel.`) as ApiResponseError;
+  error.response = { status, data };
+
+  return error;
+};
+
+const isApiResponseError = (error: unknown): error is ApiResponseError => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const response = (error as Partial<ApiResponseError>).response;
+
+  return Boolean(response && typeof response.status === 'number');
+};
+
+const readResponseBody = async (response: Response) => {
+  const text = await response.text();
+
+  if (!text) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+};
+
 const getImageName = (uri: string, index: number) => {
   const name = uri.split('/').pop()?.split('?')[0];
   return name || `inspeccion-${index + 1}.jpg`;
@@ -297,46 +335,93 @@ export const buildLaravelInspectionFormData = async (inspection: InspectionItem)
   return formData;
 };
 
-const getSyncErrorMessage = (error: unknown) => {
+const getErrorResponse = (error: unknown) => {
   if (axios.isAxiosError(error)) {
-    const message = error.response?.data && typeof error.response.data === 'object'
-      ? (error.response.data as Record<string, unknown>).message
-      : null;
-
-    if (typeof message === 'string') {
-      return message;
-    }
-
-    const errors = error.response?.data && typeof error.response.data === 'object'
-      ? (error.response.data as Record<string, unknown>).errors
-      : null;
-
-    if (errors && typeof errors === 'object') {
-      const [firstError] = Object.values(errors as Record<string, unknown>);
-
-      if (Array.isArray(firstError) && typeof firstError[0] === 'string') {
-        return firstError[0];
-      }
-
-      if (typeof firstError === 'string') {
-        return firstError;
-      }
-    }
-
-    if (!error.response) {
-      return 'Sin conexión o el servicio no respondió.';
-    }
-
-    return `Error ${error.response.status} al guardar en Laravel.`;
+    return error.response;
   }
 
-  return 'No fue posible enviar la inspección.';
+  if (isApiResponseError(error)) {
+    return error.response;
+  }
+
+  return undefined;
+};
+
+const getSyncErrorMessage = (error: unknown) => {
+  const response = getErrorResponse(error);
+  const responseData = response?.data;
+
+  const message = responseData && typeof responseData === 'object'
+    ? (responseData as Record<string, unknown>).message
+    : null;
+
+  if (typeof message === 'string') {
+    return message;
+  }
+
+  const errors = responseData && typeof responseData === 'object'
+    ? (responseData as Record<string, unknown>).errors
+    : null;
+
+  if (errors && typeof errors === 'object') {
+    const [firstError] = Object.values(errors as Record<string, unknown>);
+
+    if (Array.isArray(firstError) && typeof firstError[0] === 'string') {
+      return firstError[0];
+    }
+
+    if (typeof firstError === 'string') {
+      return firstError;
+    }
+  }
+
+  if (response) {
+    return `Error ${response.status} al guardar en Laravel.`;
+  }
+
+  if (error instanceof Error && error.message && error.message !== 'Network Error') {
+    return `Sin conexión o el servicio no respondió. Detalle técnico: ${error.message}.`;
+  }
+
+  return 'Sin conexión o el servicio no respondió.';
+};
+
+const postInspectionWithFetch = async (formData: FormData): Promise<LaravelSaveResponse> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), INSPECTION_SYNC_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${API_URL}${INSPECTION_SAVE_PATH}`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        ...(await getAuthHeaders()),
+      },
+      body: formData,
+      signal: controller.signal,
+    });
+    const responseData = await readResponseBody(response);
+
+    if (!response.ok) {
+      throw createApiResponseError(response.status, responseData);
+    }
+
+    return (responseData ?? {}) as LaravelSaveResponse;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 };
 
 export const submitInspectionToLaravel = async (inspection: InspectionItem) => {
+  const formData = await buildLaravelInspectionFormData(inspection);
+
+  if (Platform.OS !== 'web') {
+    return postInspectionWithFetch(formData);
+  }
+
   const { data } = await axios.post<LaravelSaveResponse>(
     `${API_URL}${INSPECTION_SAVE_PATH}`,
-    await buildLaravelInspectionFormData(inspection),
+    formData,
     {
       headers: await getAuthHeaders(),
       timeout: INSPECTION_SYNC_TIMEOUT_MS,
