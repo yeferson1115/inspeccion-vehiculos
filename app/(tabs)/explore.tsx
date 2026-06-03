@@ -295,12 +295,14 @@ export default function NewInspectionScreen() {
         ? 'Ingreso móvil guardado y enviado correctamente.'
         : getSyncFailureMessage(syncedItem);
 
-      setSaveStatusMessage(resultMessage);
-
       if (!isEditing) {
+        resetForm();
+        setSaveStatusMessage(resultMessage);
         showCreateAnotherPrompt(`${resultMessage} ¿Deseas crear uno nuevo?`);
         return;
       }
+
+      setSaveStatusMessage(resultMessage);
 
       Alert.alert(
         wasSynced ? 'Inspección actualizada' : 'Inspección guardada localmente',
