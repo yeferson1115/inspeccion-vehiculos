@@ -341,8 +341,7 @@ const getErrorResponse = (error: unknown) => {
     return error.response;
   }
 
-  return undefined;
-};
+const getErrorResponse = (error: unknown) => (axios.isAxiosError(error) ? error.response : undefined);
 
 const getSyncErrorMessage = (error: unknown) => {
   const response = getErrorResponse(error);
@@ -403,6 +402,7 @@ const postInspectionFormData = async (formData: FormData): Promise<LaravelSaveRe
     {
       headers: {
         Accept: 'application/json',
+        ...(Platform.OS !== 'web' ? { 'Content-Type': 'multipart/form-data' } : {}),
         ...(await getAuthHeaders()),
       },
       timeout: INSPECTION_SYNC_TIMEOUT_MS,
@@ -425,7 +425,10 @@ const postInspectionPayload = async (inspection: InspectionItem): Promise<Larave
     },
   );
 
-  return data;
+    return lastResponse;
+  }
+
+  return postInspectionFormData(await buildLaravelInspectionFormData(inspection, images));
 };
 
 const isNativeFileImagePart = (image: FormDataImagePart): image is { uri: string; name: string; type: string } => (
