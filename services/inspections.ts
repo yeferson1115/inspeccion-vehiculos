@@ -73,44 +73,6 @@ interface LaravelSaveResponse {
   };
 }
 
-interface ApiResponseError extends Error {
-  response: {
-    status: number;
-    data: unknown;
-  };
-}
-
-const createApiResponseError = (status: number, data: unknown): ApiResponseError => {
-  const error = new Error(`Error ${status} al guardar en Laravel.`) as ApiResponseError;
-  error.response = { status, data };
-
-  return error;
-};
-
-const isApiResponseError = (error: unknown): error is ApiResponseError => {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-
-  const response = (error as Partial<ApiResponseError>).response;
-
-  return Boolean(response && typeof response.status === 'number');
-};
-
-const readResponseBody = async (response: Response) => {
-  const text = await response.text();
-
-  if (!text) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return text;
-  }
-};
-
 const getImageName = (uri: string, index: number) => {
   const name = uri.split('/').pop()?.split('?')[0];
   return name || `inspeccion-${index + 1}.jpg`;
@@ -322,7 +284,10 @@ const resolveInspectionImagesForUpload = async (inspection: InspectionItem) => (
   )
 ).filter((image): image is FormDataImagePart => Boolean(image));
 
-export const buildLaravelInspectionFormData = async (inspection: InspectionItem) => {
+export const buildLaravelInspectionFormData = async (
+  inspection: InspectionItem,
+  imageParts?: FormDataImagePart[],
+) => {
   const payload = buildLaravelInspectionPayload(inspection);
   const formData = new FormData();
 
@@ -330,7 +295,7 @@ export const buildLaravelInspectionFormData = async (inspection: InspectionItem)
     formData.append(key, String(value ?? ''));
   });
 
-  const images = await resolveInspectionImagesForUpload(inspection);
+  const images = imageParts ?? await resolveInspectionImagesForUpload(inspection);
 
   images.forEach((image) => {
     formData.append('imagenes[]', image as unknown as Blob);
@@ -340,17 +305,7 @@ export const buildLaravelInspectionFormData = async (inspection: InspectionItem)
 };
 
 
-const getErrorResponse = (error: unknown) => {
-  if (axios.isAxiosError(error)) {
-    return error.response;
-  }
-
-  if (isApiResponseError(error)) {
-    return error.response;
-  }
-
-  return undefined;
-};
+const getErrorResponse = (error: unknown) => (axios.isAxiosError(error) ? error.response : undefined);
 
 const getSyncErrorMessage = (error: unknown) => {
   const response = getErrorResponse(error);
@@ -392,49 +347,37 @@ const getSyncErrorMessage = (error: unknown) => {
 };
 
 
-const postInspectionWithFetch = async (formData: FormData): Promise<LaravelSaveResponse> => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), INSPECTION_SYNC_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(`${API_URL}${INSPECTION_SAVE_PATH}`, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        ...(await getAuthHeaders()),
-      },
-      body: formData,
-      signal: controller.signal,
-    });
-    const responseData = await readResponseBody(response);
-
-    if (!response.ok) {
-      throw createApiResponseError(response.status, responseData);
-    }
-
-    return (responseData ?? {}) as LaravelSaveResponse;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-};
-
-export const submitInspectionToLaravel = async (inspection: InspectionItem) => {
-  const formData = await buildLaravelInspectionFormData(inspection);
-
-  if (Platform.OS !== 'web') {
-    return postInspectionWithFetch(formData);
-  }
-
+const postInspectionFormData = async (formData: FormData): Promise<LaravelSaveResponse> => {
   const { data } = await axios.post<LaravelSaveResponse>(
     `${API_URL}${INSPECTION_SAVE_PATH}`,
     formData,
     {
-      headers: await getAuthHeaders(),
+      headers: {
+        Accept: 'application/json',
+        ...(Platform.OS !== 'web' ? { 'Content-Type': 'multipart/form-data' } : {}),
+        ...(await getAuthHeaders()),
+      },
       timeout: INSPECTION_SYNC_TIMEOUT_MS,
     },
   );
 
   return data;
+};
+
+export const submitInspectionToLaravel = async (inspection: InspectionItem) => {
+  const images = await resolveInspectionImagesForUpload(inspection);
+
+  if (Platform.OS !== 'web' && images.length > 1) {
+    let lastResponse = await postInspectionFormData(await buildLaravelInspectionFormData(inspection, []));
+
+    for (const image of images) {
+      lastResponse = await postInspectionFormData(await buildLaravelInspectionFormData(inspection, [image]));
+    }
+
+    return lastResponse;
+  }
+
+  return postInspectionFormData(await buildLaravelInspectionFormData(inspection, images));
 };
 
 const getSavedInspectionServerId = (response: LaravelSaveResponse) =>

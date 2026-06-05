@@ -295,11 +295,15 @@ export default function NewInspectionScreen() {
         ? 'Ingreso móvil guardado y enviado correctamente.'
         : getSyncFailureMessage(syncedItem);
 
-      if (!isEditing) {
+      if (!isEditing && wasSynced) {
         resetForm();
         setSaveStatusMessage(resultMessage);
         showCreateAnotherPrompt(`${resultMessage} ¿Deseas crear uno nuevo?`);
         return;
+      }
+
+      if (!isEditing) {
+        setEditingInspection(syncedItem);
       }
 
       setSaveStatusMessage(resultMessage);
