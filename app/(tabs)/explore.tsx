@@ -103,7 +103,7 @@ const pickImage = async ({ base64 = false }: { base64?: boolean } = {}) => {
     return ImagePicker.launchCameraAsync({
       mediaTypes: ['images'],
       allowsEditing: false,
-      quality: includeBase64 ? 0.7 : 0.75,
+      quality: includeBase64 ? 0.7 : 0.55,
       base64: includeBase64,
     });
   }
@@ -118,7 +118,7 @@ const pickImage = async ({ base64 = false }: { base64?: boolean } = {}) => {
   return ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
     allowsEditing: false,
-    quality: includeBase64 ? 0.7 : 0.75,
+    quality: includeBase64 ? 0.7 : 0.55,
     base64: includeBase64,
   });
 };
@@ -438,7 +438,7 @@ export default function NewInspectionScreen() {
           <Pressable
             style={[styles.primaryButton, isSaving ? styles.disabledButton : null]}
             onPress={() => { void guardar(); }}
-            disabled={false}>
+            disabled={isSaving}>
             <Text style={styles.primaryButtonText}>
               {isSaving ? 'Guardando...' : editingInspection ? 'Actualizar' : 'Guardar'}
             </Text>

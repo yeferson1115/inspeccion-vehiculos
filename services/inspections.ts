@@ -8,7 +8,7 @@ import { API_URL, getAuthHeaders } from '@/services/auth';
 export const INSPECTIONS_STORAGE_KEY = 'inspections';
 
 const INSPECTION_SAVE_PATH = process.env.EXPO_PUBLIC_INSPECTION_SAVE_PATH ?? '/ingreso/movil/guardar';
-const INSPECTION_SYNC_TIMEOUT_MS = 60000;
+const INSPECTION_SYNC_TIMEOUT_MS = 180000;
 
 export type InspectionSyncStatus = 'pending' | 'sent' | 'failed';
 
@@ -147,7 +147,7 @@ type FormDataImagePart = string | { uri: string; name: string; type: string };
 const resolveImageData = async (image: InspectionImage, index: number): Promise<FormDataImagePart | null> => {
   const normalizedImage = normalizeInspectionImage(image, index);
 
-  if (normalizedImage.dataUri) {
+  if (Platform.OS === 'web' && normalizedImage.dataUri) {
     return normalizedImage.dataUri;
   }
 
@@ -159,6 +159,14 @@ const resolveImageData = async (image: InspectionImage, index: number): Promise<
     return null;
   }
 
+  if (Platform.OS !== 'web') {
+    return {
+      uri: normalizedImage.uri,
+      name: normalizedImage.name,
+      type: normalizedImage.type,
+    };
+  }
+
   try {
     const base64 = await FileSystem.readAsStringAsync(normalizedImage.uri, {
       encoding: FileSystem.EncodingType.Base64,
@@ -166,14 +174,6 @@ const resolveImageData = async (image: InspectionImage, index: number): Promise<
 
     return toDataUri(base64, normalizedImage.type);
   } catch {
-    if (Platform.OS !== 'web') {
-      return {
-        uri: normalizedImage.uri,
-        name: normalizedImage.name,
-        type: normalizedImage.type,
-      };
-    }
-
     return null;
   }
 };
@@ -316,6 +316,12 @@ export const buildLaravelInspectionPayload = (inspection: InspectionItem): Inspe
   origen: 'app_movil',
 });
 
+const resolveInspectionImagesForUpload = async (inspection: InspectionItem) => (
+  await Promise.all(
+    inspection.imagenes.map((image, index) => resolveImageData(image, index)),
+  )
+).filter((image): image is FormDataImagePart => Boolean(image));
+
 export const buildLaravelInspectionFormData = async (inspection: InspectionItem) => {
   const payload = buildLaravelInspectionPayload(inspection);
   const formData = new FormData();
@@ -324,16 +330,15 @@ export const buildLaravelInspectionFormData = async (inspection: InspectionItem)
     formData.append(key, String(value ?? ''));
   });
 
-  const images = await Promise.all(
-    inspection.imagenes.map((image, index) => resolveImageData(image, index)),
-  );
+  const images = await resolveInspectionImagesForUpload(inspection);
 
-  images.filter((image): image is FormDataImagePart => Boolean(image)).forEach((image) => {
+  images.forEach((image) => {
     formData.append('imagenes[]', image as unknown as Blob);
   });
 
   return formData;
 };
+
 
 const getErrorResponse = (error: unknown) => {
   if (axios.isAxiosError(error)) {
@@ -385,6 +390,7 @@ const getSyncErrorMessage = (error: unknown) => {
 
   return 'Sin conexión o el servicio no respondió.';
 };
+
 
 const postInspectionWithFetch = async (formData: FormData): Promise<LaravelSaveResponse> => {
   const controller = new AbortController();
